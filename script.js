@@ -1,21 +1,42 @@
 /* ============================================================
    script.js
    ------------------------------------------------------------
-   UI + storage + execução. Não conhece as regras matemáticas.
+   UI + storage + execução do jogo. Não conhece as regras
+   matemáticas (isso é do regrasdeganhos.js).
+
    Depende de: regrasdeganhos.js v3 (deve vir ANTES no HTML)
 
-   v3.4 — Otimizado para mobile:
-   - [hidden] usado em overlays/modais/painéis (compatível com
-     o index.html novo que marca esses elementos com hidden)
-   - Cache de SVG + pool de elementos nos strips
-   - Throttle de áudio, partículas reduzidas em mobile
-   - Contador de prêmio a 30fps em mobile
-   - Auto-spin pausa quando aba perde foco
-   - will-change aplicado só durante o giro
+   v3.6 — Integração com o novo fluxo (login → home → jogo):
+   - [CRÍTICO] NÃO cria convidado. Se não houver sessão válida,
+     redireciona para index.html (tela de login).
+   - [CRÍTICO] Removido todo o tratamento de "guest" — quem
+     decide se é convidado é o login.
+   - [CRÍTICO] Evento especial não paga em dobro: a roleta
+     inline apenas EXIBE o resultado já computado no play().
+   - [ALTO]    addEventProgress ignora giros SPECIAL_EVENT.
+   - [MÉDIO]   goHistory aplica hash sem reload se já na home.
+   - [BAIXO]   stateLabel reflete RTP calculado no boot.
    ============================================================ */
 
 (function () {
   "use strict";
+
+  /* ============================================================
+     CONSTANTES DE NAVEGAÇÃO / STORAGE
+     ------------------------------------------------------------
+     LOGIN_PAGE é o ÚNICO portão do app. Se não houver sessão
+     válida, o script redireciona pra lá e aborta.
+     ============================================================ */
+  const LOGIN_PAGE = "index.html";
+  const HOME_PAGE  = "home.html";
+  const BONUS_PAGE = "regatebonus.html";   // ← troca aqui se o nome real for outro
+
+  const STORAGE_USERS   = "cassino_users_v1";
+  const STORAGE_SESSION = "cassino_session_v1";
+  const STORAGE_HISTORY = "cassino_history_v1";
+
+  const AUTO_SPIN_OPTIONS = [10, 25, 50, 100, 250, 500, 1000];
+  const GAME_STATES = { IDLE: "idle", SPINNING: "spinning", RESULT: "result", WIN: "win", SUPER_WIN: "super-win", EVENT: "event" };
 
   /* ============================================================
      DEPENDÊNCIAS DO MOTOR DE REGRAS
@@ -42,16 +63,6 @@
     GameEngine,
     getWinType, getSymbolById,
   } = R;
-
-  /* ============================================================
-     CONSTANTES DE UI/STORAGE
-     ============================================================ */
-  const STORAGE_USERS = "cassino_users_v1";
-  const STORAGE_SESSION = "cassino_session_v1";
-  const STORAGE_HISTORY = "cassino_history_v1";
-  const AUTO_SPIN_OPTIONS = [10, 25, 50, 100, 250, 500, 1000];
-
-  const GAME_STATES = { IDLE: "idle", SPINNING: "spinning", RESULT: "result", WIN: "win", SUPER_WIN: "super-win", EVENT: "event" };
 
   /* ============================================================
      DETECÇÃO DE AMBIENTE
@@ -82,6 +93,7 @@
     cancelRequested: false,
     results: [],
     roundTurboSnapshot: false,
+    _pendingEventSeg: null,
   };
 
   let currentUser = null;
@@ -128,7 +140,6 @@
     el._timer = setTimeout(() => el.classList.remove("show"), 2400);
   }
 
-  /* Helpers para [hidden] (compatível com index.html novo) */
   function show(el) { if (el) el.removeAttribute("hidden"); }
   function hide(el) { if (el) el.setAttribute("hidden", ""); }
 
@@ -140,7 +151,7 @@
     } catch (e) { return ""; }
   }
 
-  function safeRedirect(url) {
+  function goTo(url) {
     if (redirecting) return false;
     let targetFile = "";
     try {
@@ -149,7 +160,8 @@
     const here = currentFileName();
     if (here && targetFile && here === targetFile) return false;
     redirecting = true;
-    window.location.replace(url);
+    try { window.location.replace(url); }
+    catch (e) { window.location.href = url; }
     return true;
   }
 
@@ -202,17 +214,23 @@
      STORAGE
      ============================================================ */
   function getUsers() { try { return JSON.parse(localStorage.getItem(STORAGE_USERS)) || []; } catch { return []; } }
-  function saveUsers(users) { localStorage.setItem(STORAGE_USERS, JSON.stringify(users)); }
-  function getSession() { return localStorage.getItem(STORAGE_SESSION); }
-  function clearSession() { localStorage.removeItem(STORAGE_SESSION); }
+  function saveUsers(users) { try { localStorage.setItem(STORAGE_USERS, JSON.stringify(users)); } catch {} }
+  function getSession() { try { return localStorage.getItem(STORAGE_SESSION); } catch { return null; } }
+  function clearSession() { try { localStorage.removeItem(STORAGE_SESSION); } catch {} }
 
+  /* Persiste updates do usuário logado em cassino_users_v1. */
   function updateCurrentUser(updates) {
     if (!currentUser) return;
-    if (currentUser.guest) { Object.assign(currentUser, updates); return; }
+    Object.assign(currentUser, updates);
     const users = getUsers();
     const idx = users.findIndex(u => u.id === currentUser.id);
-    if (idx >= 0) { users[idx] = { ...users[idx], ...updates }; saveUsers(users); currentUser = users[idx]; }
+    if (idx >= 0) {
+      users[idx] = { ...users[idx], ...updates };
+      saveUsers(users);
+      currentUser = users[idx];
+    }
   }
+
   function addHistory(item) {
     try {
       const hist = JSON.parse(localStorage.getItem(STORAGE_HISTORY)) || [];
@@ -253,7 +271,6 @@
     return audioCtx;
   }
 
-  // Throttle global: evita criar ~20 osciladores/s durante o giro
   let _lastTickTime = 0;
   const TICK_MIN_INTERVAL = IS_MOBILE ? 55 : 35;
 
@@ -321,7 +338,7 @@
   }
 
   /* ============================================================
-     SVGs
+     SVGs (inalterado da v3.5)
      ============================================================ */
   const SVG = {
     wild:    `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="wildGrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#ffd700"/><stop offset="50%" stop-color="#ff8c00"/><stop offset="100%" stop-color="#d4261a"/></linearGradient></defs><rect x="15" y="20" width="70" height="60" rx="8" fill="url(#wildGrad)" stroke="#6b4f0a" stroke-width="2"/><text x="50" y="62" font-family="Cinzel, serif" font-size="36" font-weight="900" text-anchor="middle" fill="#fff" stroke="#6b4f0a" stroke-width="1">W</text></svg>`,
@@ -335,12 +352,6 @@
     star:    `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="starGold" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#fff5cc"/><stop offset="50%" stop-color="#ffd700"/><stop offset="100%" stop-color="#b8860b"/></linearGradient></defs><path d="M50 10 L61 40 L92 40 L67 60 L76 90 L50 72 L24 90 L33 60 L8 40 L39 40 Z" fill="url(#starGold)" stroke="#6b4f0a" stroke-width="1.5"/></svg>`,
   };
 
-  /* ============================================================
-     CACHE DE SVG
-     ------------------------------------------------------------
-     Cada ícone é parseado UMA vez (via <template>) e depois só
-     clonado. Evita criar dezenas de strings de SVG por giro.
-     ============================================================ */
   const _svgCache = Object.create(null);
   function svgFor(icon) {
     if (!(icon in _svgCache)) {
@@ -478,7 +489,7 @@
   }
 
   /* ============================================================
-     ANIMAÇÃO DE REELS — com pool de elementos e SVG cache
+     ANIMAÇÃO DE REELS
      ============================================================ */
   const STRIP_LENGTH_NORMAL = 20;
   const STRIP_LENGTH_TURBO  = 8;
@@ -513,7 +524,7 @@
   function buildStripForAnimation(stripEl, finalSymbols, totalItems) {
     ensureStripPool(stripEl, totalItems);
     const kids = stripEl.children;
-    const before = totalItems - 6; // 3 finais + 3 depois
+    const before = totalItems - 6;
 
     for (let i = 0; i < before; i++) setSymbolInSlot(kids[i], GameEngine.rollSymbol());
     setSymbolInSlot(kids[before],     finalSymbols[0]);
@@ -629,7 +640,7 @@
   function emitSoftGlow(isSuper) {
     if (PREFERS_REDUCED_MOTION) return;
     if (typeof confetti !== "function") return;
-    if (IS_MOBILE && !isSuper) return; // glow pequeno só no desktop
+    if (IS_MOBILE && !isSuper) return;
     const cores = ["#ffd700", "#f5c542", "#b8860b", "#8a6d1a"];
     confetti({
       particleCount: isSuper ? (IS_MOBILE ? 30 : 60) : 25,
@@ -823,7 +834,10 @@
     return currentUser.eventProgress;
   }
   function setEventProgress(v) { updateCurrentUser({ eventProgress: v }); }
-  function addEventProgress(betCents) {
+
+  /* Progresso do evento não conta em giros SPECIAL_EVENT. */
+  function addEventProgress(betCents, categoryId) {
+    if (categoryId === "SPECIAL_EVENT") return;
     const inc = betCents * EVENT_CONFIG.progressPerCent;
     const prog = Math.min(EVENT_CONFIG.threshold, getEventProgress() + inc);
     setEventProgress(prog);
@@ -833,8 +847,12 @@
     return getEventProgress() >= EVENT_CONFIG.threshold && currentEventState === EVENT_STATES.LOCKED;
   }
 
-  async function triggerSpecialEvent() {
+  /* triggerSpecialEvent NÃO paga: apenas EXIBE o resultado que
+     GameEngine.play() já computou e creditou.
+     O parâmetro `seg` é o eventWheelResult do giro. */
+  async function triggerSpecialEvent(seg) {
     if (currentState !== GAME_STATES.IDLE) return;
+    if (!seg) return;
     setEventState(EVENT_STATES.READY);
     setState(GAME_STATES.EVENT);
 
@@ -872,14 +890,14 @@
     vibrate([60, 30, 60, 30, 120]);
     playJackpot();
 
-    const prizeSeg = GameEngine.spinEventWheel();
-    const prizeCents = Math.floor(currentBetCents * prizeSeg.mult);
+    const prizeCents = Math.floor(currentBetCents * seg.mult);
     const segCount = EVENT_CONFIG.segments.length;
-    const segIndex = EVENT_CONFIG.segments.indexOf(prizeSeg);
+    const segIndex = EVENT_CONFIG.segments.indexOf(seg);
+    const safeIndex = segIndex >= 0 ? segIndex : 0;
     const segAngle = 360 / segCount;
 
     const totalRotation = 360 * (5 + Math.random() * 3);
-    const targetRotation = totalRotation + (360 - segIndex * segAngle - segAngle / 2);
+    const targetRotation = totalRotation + (360 - safeIndex * segAngle - segAngle / 2);
 
     inner.style.transition = "none";
     inner.style.transform = "rotate(0deg)";
@@ -903,7 +921,7 @@
     if (badge) badge.textContent = "EVENTO";
     if (prizeLabel) { prizeLabel.textContent = "BÔNUS"; prizeLabel.classList.add("reveal"); }
     await new Promise(r => setTimeout(r, 300));
-    if (prizeMult) { prizeMult.textContent = prizeSeg.label; prizeMult.classList.add("reveal"); }
+    if (prizeMult) { prizeMult.textContent = seg.label; prizeMult.classList.add("reveal"); }
     playWin(false);
     emitGoldParticles(80, { x: 0.5, y: 0.4 });
     emitSoftGlow(true);
@@ -927,15 +945,12 @@
     if (stars) stars.classList.add("reveal");
     vibrate([80, 40, 80, 40, 150]);
 
-    if (prizeCents > 0) {
-      updateCurrentUser({ coins: currentUser.coins + prizeCents });
-      renderBalance(true);
-    }
+    /* NÃO credita de novo — o crédito aconteceu em executeSpin(). */
     sessionStats.events++;
     persistUserStats({ event: true });
     addHistory({
       type: "event", game: "Tigrinho", bet: currentBetCents, win: prizeCents,
-      mult: prizeSeg.mult, label: prizeSeg.label, saldo: currentUser.coins, ts: Date.now(),
+      mult: seg.mult, label: seg.label, saldo: currentUser.coins, ts: Date.now(),
     });
 
     await new Promise(r => setTimeout(r, 2200));
@@ -955,7 +970,7 @@
     if (plus) plus.disabled = false;
     renderAutoSelectorUI();
 
-    toast(`Bônus: +L$ ${formatCents(prizeCents)} (${prizeSeg.label})`);
+    toast(`Bônus: +L$ ${formatCents(prizeCents)} (${seg.label})`);
   }
 
   function buildEventWheel() {
@@ -1009,9 +1024,10 @@
     sessionStats.wagered += currentBetCents;
     updateDebugPanel();
 
-    addEventProgress(currentBetCents);
-
     const result = GameEngine.play(currentBetCents, currentMode);
+
+    addEventProgress(currentBetCents, result.category);
+
     sessionStats.lastCategory = result.category;
 
     const mode = MODES[currentMode] || MODES.normal;
@@ -1178,7 +1194,9 @@
     if (result && result.error === "saldo") toast("L$ insuficientes", "error");
     else if (result && result.totalWin > 0) toast(`+L$ ${formatCents(result.totalWin)}`);
 
-    if (isEventReady()) await triggerSpecialEvent();
+    if (result && result.eventWheelResult && isEventReady()) {
+      await triggerSpecialEvent(result.eventWheelResult);
+    }
   }
 
   /* ============================================================
@@ -1226,7 +1244,6 @@
     for (let i = 0; i < autoSpin.totalRounds; i++) {
       if (autoSpin.cancelRequested) break;
 
-      // Pausa se aba perder foco (evita rodar em background)
       while (document.hidden && !autoSpin.cancelRequested) {
         await new Promise(r => setTimeout(r, 200));
       }
@@ -1248,8 +1265,9 @@
       updateAutoProgress();
       renderAutoChip(result, i);
 
-      if (result.eventReady) {
+      if (result.eventReady && result.eventWheelResult) {
         autoSpin.cancelRequested = true;
+        autoSpin._pendingEventSeg = result.eventWheelResult;
         break;
       }
       if (autoSpin.cancelRequested) break;
@@ -1257,9 +1275,14 @@
       await new Promise(r => setTimeout(r, turboActive ? 100 : 300));
     }
 
+    const pendingSeg = autoSpin._pendingEventSeg || null;
+    autoSpin._pendingEventSeg = null;
+
     finishAutoSpin();
 
-    if (isEventReady()) await triggerSpecialEvent();
+    if (pendingSeg && isEventReady()) {
+      await triggerSpecialEvent(pendingSeg);
+    }
   }
 
   function updateAutoProgress() {
@@ -1443,60 +1466,63 @@
   /* ============================================================
      NAVEGAÇÃO
      ============================================================ */
-  function goHome() { vibrate(10); safeRedirect("home.html"); }
-  function goHistory() { vibrate(10); safeRedirect("home.html#historico"); }
-  function goToBonus() { vibrate(10); safeRedirect("regatebonus.html"); }
+  function goHome() { vibrate(10); goTo(HOME_PAGE); }
+
+  function goHistory() {
+    vibrate(10);
+    const here = currentFileName();
+    if (here === HOME_PAGE) {
+      try { window.location.hash = "#historico"; } catch (e) {}
+      return;
+    }
+    goTo(HOME_PAGE + "#historico");
+  }
+  function goToBonus() { vibrate(10); goTo(BONUS_PAGE); }
 
   /* ============================================================
-     INIT
+     INIT — REGRA ÚNICA DE SESSÃO
+     ------------------------------------------------------------
+     1. Lê cassino_session_v1.
+     2. Procura user correspondente em cassino_users_v1.
+     3. Se não achar → limpa sessão e volta pro login (index.html).
+     4. Se achar → carrega e inicia o jogo normalmente.
+     NÃO cria convidado. NÃO cria sessão. NÃO cria user.
      ============================================================ */
   function boot() {
-    const sessionId = getSession();
     let user = null;
-
-    if (sessionId) {
-      const users = getUsers();
-      user = users.find(u => u.id === sessionId) || null;
-      if (!user) clearSession();
-    }
+    try {
+      const sid = getSession();
+      if (sid) {
+        const users = getUsers();
+        user = users.find(u => u.id === sid) || null;
+      }
+    } catch (e) { user = null; }
 
     if (!user) {
-      const here = currentFileName();
-      const loginPage = "index.html";
-      const isLoginPage = (here === "" || here === loginPage);
-
-      if (!isLoginPage) {
-        if (safeRedirect(loginPage)) return;
-      }
-
-      user = {
-        id: "guest_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
-        username: "Convidado",
-        guest: true,
-        coins: 1000,
-        stats: {},
-        eventProgress: 0,
-        createdAt: Date.now(),
-      };
-      currentUser = user;
-      console.warn("[script.js] Sessão ausente — rodando como convidado temporário.");
-    } else {
-      currentUser = user;
-      if (typeof currentUser.coins !== "number") {
-        currentUser.coins = 1000;
-        updateCurrentUser({ coins: 1000 });
-      }
-      if (typeof currentUser.eventProgress !== "number") {
-        updateCurrentUser({ eventProgress: 0 });
-      }
-      if (!currentUser.stats) updateCurrentUser({ stats: {} });
+      // Sem sessão válida → login. Fim. Nada mais roda.
+      clearSession();
+      goTo(LOGIN_PAGE);
+      return;
     }
+
+    currentUser = user;
+    if (typeof currentUser.coins !== "number") {
+      currentUser.coins = 0;
+      updateCurrentUser({ coins: 0 });
+    }
+    if (typeof currentUser.eventProgress !== "number") {
+      updateCurrentUser({ eventProgress: 0 });
+    }
+    if (!currentUser.stats) updateCurrentUser({ stats: {} });
 
     renderBalance();
     renderBetUI();
     renderTurboUI();
     renderAutoSelectorUI();
     renderPaytable();
+
+    // stateLabel reflete o RTP calculado no boot
+    setState(GAME_STATES.IDLE);
 
     const initialGrid = [
       [resolveSymbol("crown"), resolveSymbol("bell"),  resolveSymbol("cherry")],
@@ -1603,12 +1629,10 @@
     document.addEventListener("click", markGesture, { once: true });
 
     const rtp = getTheoreticalRTPPercent();
-    console.log("%c🎰 Tigrinho · Módulos carregados (v3.4 mobile)", "color:#ffd700;font-size:16px;font-weight:900;");
-    console.log("Motor:", "regrasdeganhos.js v3.2");
-    console.log("UI:", "script.js v3.4");
-    console.log("Mobile:", IS_MOBILE ? "sim" : "não", "| Reduced motion:", PREFERS_REDUCED_MOTION ? "sim" : "não");
-    console.log("Usuário:", currentUser.username, currentUser.guest ? "(convidado)" : "", "| L$:", currentUser.coins);
+    console.log("%c🎰 laistiger.html · jogo (v3.6)", "color:#ffd700;font-size:16px;font-weight:900;");
+    console.log("Usuário:", currentUser.username, "| L$:", formatCents(currentUser.coins));
     console.log("RTP teórico:", rtp.toFixed(2) + "%");
+    console.log("Navegação:", "login=" + LOGIN_PAGE, "| home=" + HOME_PAGE, "| bônus=" + BONUS_PAGE);
   }
 
   if (document.readyState === "loading") {

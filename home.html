@@ -1,0 +1,763 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0a0508">
+<meta name="color-scheme" content="dark">
+<meta name="format-detection" content="telephone=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Tigrinho">
+<link rel="icon" href="data:,">
+<link rel="apple-touch-icon" href="data:,">
+<title>Tigrinho Dourado · Início</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+
+<style>
+/* ============================================================
+   HOME.HTML — HUB / MENU
+   ------------------------------------------------------------
+   Responsabilidades:
+   1. Exigir sessão válida (senão → index.html).
+   2. Mostrar usuário, saldo e stats rápidos.
+   3. Card principal → laistiger.html (o jogo).
+   4. Botão → regatebonus.html (tela de bônus).
+   5. Logout → limpa sessão, volta pro login.
+
+   NÃO faz: sorteio, pagamento, criação de sessão, cálculo de RTP.
+   ============================================================ */
+
+:root {
+  --gold: #ffd700;
+  --gold-3: #b8860b;
+  --gold-5: #ffe066;
+  --red: #d4261a;
+  --red-dark: #8b0000;
+  --bg: #0a0508;
+  --bg-2: #14080c;
+  --bg-3: #2a0a12;
+  --cream: #fdf6e3;
+  --text: #ffffff;
+  --text-2: #d0c8b8;
+  --text-3: #8a8070;
+  --radius: 14px;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --font-title: 'Cinzel', serif;
+  --font-body: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; -webkit-font-smoothing: antialiased; }
+[hidden] { display: none !important; }
+
+html, body { height: 100%; overflow-x: hidden; }
+
+body {
+  font-family: var(--font-body);
+  color: var(--text);
+  background:
+    radial-gradient(ellipse at top, rgba(212, 38, 26, 0.20) 0%, transparent 55%),
+    radial-gradient(ellipse at bottom, rgba(255, 215, 0, 0.12) 0%, transparent 55%),
+    linear-gradient(180deg, #050205 0%, #0a0508 50%, #14080c 100%);
+  background-attachment: fixed;
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: calc(16px + var(--safe-top)) 16px calc(24px + var(--safe-bottom));
+  user-select: none;
+  -webkit-user-select: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* ============================================================
+   SPLASH
+   ============================================================ */
+.splash {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  background: #0a0508;
+  z-index: 9999;
+}
+.splash i {
+  font-size: 42px;
+  color: var(--gold);
+  filter: drop-shadow(0 0 20px rgba(255,215,0,0.7));
+}
+.splash span {
+  font-family: var(--font-title);
+  font-size: 12px;
+  letter-spacing: 0.3em;
+  color: rgba(255,215,0,0.7);
+  text-transform: uppercase;
+  font-weight: 800;
+}
+
+/* ============================================================
+   LAYOUT
+   ============================================================ */
+.wrap {
+  width: 100%;
+  max-width: 460px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* ============================================================
+   TOPBAR
+   ============================================================ */
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.topbar-user {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.topbar-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #ffe066 0%, #ffd700 45%, #b8860b 100%);
+  color: #1a0a05;
+  font-family: var(--font-title);
+  font-size: 16px;
+  font-weight: 900;
+  flex-shrink: 0;
+  box-shadow: 0 0 18px rgba(255,215,0,0.35);
+}
+.topbar-info {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.topbar-name {
+  font-family: var(--font-title);
+  font-size: 14px;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  color: var(--gold);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 180px;
+}
+.topbar-tag {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: rgba(255,215,0,0.55);
+}
+.logout-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  border: 1.5px solid rgba(212,38,26,0.5);
+  background: rgba(212,38,26,0.12);
+  color: #ff8a80;
+  font-size: 15px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.12s, background 0.2s;
+  flex-shrink: 0;
+}
+.logout-btn:active { transform: scale(0.92); }
+
+/* ============================================================
+   MARCA
+   ============================================================ */
+.brand {
+  text-align: center;
+  margin-top: 4px;
+}
+.brand-title {
+  font-family: var(--font-title);
+  font-size: clamp(26px, 8vw, 38px);
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  background: linear-gradient(180deg, #fff5cc 0%, #ffd700 45%, #b8860b 100%);
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 4px 12px rgba(255,215,0,0.5));
+  line-height: 1.05;
+}
+.brand-sub {
+  font-size: 10px;
+  letter-spacing: 0.3em;
+  color: rgba(255,215,0,0.7);
+  text-transform: uppercase;
+  font-weight: 800;
+  margin-top: 6px;
+}
+
+/* ============================================================
+   CARD DE SALDO
+   ============================================================ */
+.balance-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 18px;
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(255,215,0,0.12) 0%, transparent 60%),
+    linear-gradient(180deg, #1a0a12 0%, #0a0508 100%);
+  border: 1.5px solid rgba(255,215,0,0.35);
+  box-shadow: 0 12px 32px rgba(0,0,0,0.6), 0 0 30px rgba(255,215,0,0.06);
+}
+.balance-left { display: flex; flex-direction: column; gap: 4px; }
+.balance-label {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  color: rgba(255,215,0,0.7);
+}
+.balance-value {
+  font-family: var(--font-title);
+  font-size: clamp(26px, 8vw, 34px);
+  font-weight: 900;
+  color: var(--gold);
+  font-variant-numeric: tabular-nums;
+  filter: drop-shadow(0 2px 10px rgba(255,215,0,0.4));
+  line-height: 1;
+}
+.balance-value .cur {
+  font-size: 14px;
+  opacity: 0.7;
+  margin-right: 4px;
+  vertical-align: middle;
+}
+.balance-icon {
+  font-size: 36px;
+  filter: drop-shadow(0 0 12px rgba(255,215,0,0.5));
+}
+
+/* ============================================================
+   AVISO CONVIDADO
+   ============================================================ */
+.guest-warn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: rgba(255,215,0,0.08);
+  border: 1px solid rgba(255,215,0,0.3);
+  font-size: 12px;
+  font-weight: 700;
+  color: rgba(255,215,0,0.85);
+}
+.guest-warn i { font-size: 14px; }
+
+/* ============================================================
+   CARD PRINCIPAL → JOGO
+   ============================================================ */
+.game-card {
+  position: relative;
+  display: block;
+  padding: 24px 20px;
+  border-radius: 20px;
+  text-decoration: none;
+  color: inherit;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(255,215,0,0.18) 0%, transparent 65%),
+    linear-gradient(180deg, #2a0a12 0%, #14080c 100%);
+  border: 2px solid rgba(255,215,0,0.55);
+  box-shadow: 0 20px 50px rgba(0,0,0,0.7), 0 0 40px rgba(255,215,0,0.15);
+  transition: transform 0.15s, box-shadow 0.3s, border-color 0.3s;
+  cursor: pointer;
+}
+.game-card:active { transform: scale(0.985); }
+.game-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(115deg, transparent 30%, rgba(255,255,255,0.08) 50%, transparent 70%);
+  transform: translateX(-100%);
+  animation: shine 3.5s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes shine {
+  0%, 60% { transform: translateX(-100%); }
+  100%    { transform: translateX(100%); }
+}
+.game-card-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.game-card-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 100px;
+  background: linear-gradient(135deg, rgba(255,215,0,0.2), rgba(212,38,26,0.2));
+  border: 1px solid rgba(255,215,0,0.5);
+  font-family: var(--font-title);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.25em;
+  color: var(--gold);
+  text-transform: uppercase;
+}
+.game-card-badge i { font-size: 10px; }
+.game-card-title {
+  font-family: var(--font-title);
+  font-size: clamp(20px, 6vw, 26px);
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  background: linear-gradient(180deg, #fff5cc 0%, #ffd700 50%, #b8860b 100%);
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 2px 8px rgba(255,215,0,0.5));
+  margin-bottom: 6px;
+}
+.game-card-desc {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-2);
+  margin-bottom: 18px;
+}
+.game-card-symbols {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 18px;
+  justify-content: center;
+}
+.game-card-symbols span {
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0,0,0,0.4);
+  border: 1px solid rgba(255,215,0,0.25);
+  font-size: 22px;
+  filter: drop-shadow(0 0 6px rgba(255,215,0,0.4));
+}
+.game-card-cta {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 14px;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #ffe066 0%, #ffd700 35%, #b8860b 100%);
+  color: #1a0a05;
+  font-family: var(--font-title);
+  font-size: 14px;
+  font-weight: 900;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  box-shadow: 0 4px 0 #6b4f0a, 0 10px 24px rgba(255,215,0,0.3);
+}
+.game-card-cta i { font-size: 14px; }
+
+/* ============================================================
+   BOTÃO BÔNUS
+   ============================================================ */
+.bonus-btn {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 18px;
+  border-radius: 16px;
+  border: 1.5px solid rgba(255,215,0,0.4);
+  background: linear-gradient(180deg, #1a0a12 0%, #0a0508 100%);
+  color: var(--text);
+  text-decoration: none;
+  cursor: pointer;
+  transition: transform 0.15s, border-color 0.3s, box-shadow 0.3s;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+}
+.bonus-btn:active { transform: scale(0.98); }
+.bonus-btn:hover {
+  border-color: var(--gold);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.6), 0 0 26px rgba(255,215,0,0.25);
+}
+.bonus-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle, #ffe066 0%, #b8860b 100%);
+  color: #1a0a05;
+  font-size: 22px;
+  flex-shrink: 0;
+  box-shadow: 0 0 20px rgba(255,215,0,0.5);
+}
+.bonus-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.bonus-title {
+  font-family: var(--font-title);
+  font-size: 15px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  color: var(--gold);
+  text-transform: uppercase;
+}
+.bonus-sub {
+  font-size: 11px;
+  color: var(--text-2);
+  font-weight: 600;
+}
+.bonus-arrow {
+  color: rgba(255,215,0,0.65);
+  font-size: 16px;
+}
+
+/* ============================================================
+   STATS RÁPIDOS
+   ============================================================ */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.stat-tile {
+  padding: 12px 8px;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #14080c 0%, #0a0508 100%);
+  border: 1px solid rgba(255,215,0,0.18);
+  text-align: center;
+}
+.stat-tile-label {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: rgba(255,215,0,0.6);
+  margin-bottom: 6px;
+}
+.stat-tile-value {
+  font-family: var(--font-title);
+  font-size: 15px;
+  font-weight: 900;
+  color: var(--gold);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ============================================================
+   RODAPÉ
+   ============================================================ */
+.foot {
+  margin-top: 4px;
+  text-align: center;
+  font-size: 9px;
+  letter-spacing: 0.25em;
+  color: rgba(208,200,184,0.35);
+  text-transform: uppercase;
+  font-weight: 700;
+}
+
+/* ============================================================
+   MOTION
+   ============================================================ */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  .game-card::after { display: none; }
+}
+</style>
+</head>
+<body>
+
+<!-- Splash enquanto validamos sessão -->
+<div class="splash" id="splash">
+  <i class="fa-solid fa-crown fa-beat"></i>
+  <span>Carregando…</span>
+</div>
+
+<div class="wrap" id="wrap" hidden>
+
+  <!-- ========== TOPBAR ========== -->
+  <div class="topbar">
+    <div class="topbar-user">
+      <div class="topbar-avatar" id="avatar">?</div>
+      <div class="topbar-info">
+        <div class="topbar-name" id="userName">—</div>
+        <div class="topbar-tag" id="userTag">—</div>
+      </div>
+    </div>
+    <button class="logout-btn" id="logoutBtn" aria-label="Sair" title="Sair">
+      <i class="fa-solid fa-right-from-bracket"></i>
+    </button>
+  </div>
+
+  <!-- ========== MARCA ========== -->
+  <div class="brand">
+    <h1 class="brand-title">Tigrinho Dourado</h1>
+    <p class="brand-sub">Escolha seu destino</p>
+  </div>
+
+  <!-- ========== SALDO ========== -->
+  <div class="balance-card">
+    <div class="balance-left">
+      <div class="balance-label">Seu saldo</div>
+      <div class="balance-value">
+        <span class="cur">L$</span><span id="balanceValue">0,00</span>
+      </div>
+    </div>
+    <div class="balance-icon">💰</div>
+  </div>
+
+  <!-- ========== AVISO CONVIDADO ========== -->
+  <div class="guest-warn" id="guestWarn" hidden>
+    <i class="fa-solid fa-circle-info"></i>
+    <span>Você está como <strong>convidado</strong>. Crie uma conta pra salvar progresso.</span>
+  </div>
+
+  <!-- ========== CARD PRINCIPAL → JOGO ========== -->
+  <a class="game-card" id="gameCard" href="laistiger.html" aria-label="Jogar Fichas Douradas">
+    <div class="game-card-head">
+      <div class="game-card-badge">
+        <i class="fa-solid fa-bolt"></i>
+        <span>Disponível</span>
+      </div>
+    </div>
+    <div class="game-card-title">Fichas Douradas</div>
+    <div class="game-card-desc">
+      Caça-níquel clássico com 3 rolos, 5 linhas, modo raio e evento especial da roleta.
+    </div>
+    <div class="game-card-symbols" aria-hidden="true">
+      <span>👑</span><span>💎</span><span>7️⃣</span>
+    </div>
+    <div class="game-card-cta">
+      <i class="fa-solid fa-play"></i>
+      <span>Jogar agora</span>
+    </div>
+  </a>
+
+  <!-- ========== BOTÃO BÔNUS ========== -->
+  <a class="bonus-btn" id="bonusBtn" href="regatebonus.html" aria-label="Resgatar bônus">
+    <div class="bonus-icon">
+      <i class="fa-solid fa-gift"></i>
+    </div>
+    <div class="bonus-text">
+      <div class="bonus-title">Resgatar Bônus</div>
+      <div class="bonus-sub" id="bonusSub">Toque para ver o que te espera</div>
+    </div>
+    <div class="bonus-arrow">
+      <i class="fa-solid fa-chevron-right"></i>
+    </div>
+  </a>
+
+  <!-- ========== STATS ========== -->
+  <div class="stats-grid">
+    <div class="stat-tile">
+      <div class="stat-tile-label">Giros</div>
+      <div class="stat-tile-value" id="statSpins">0</div>
+    </div>
+    <div class="stat-tile">
+      <div class="stat-tile-label">Maior</div>
+      <div class="stat-tile-value" id="statBiggest">L$ 0</div>
+    </div>
+    <div class="stat-tile">
+      <div class="stat-tile-label">Eventos</div>
+      <div class="stat-tile-value" id="statEvents">0</div>
+    </div>
+  </div>
+
+  <p class="foot">Projeto local · sem dinheiro real</p>
+
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ============================================================
+     CONTRATO DE STORAGE (igual ao index.html / laistiger.html)
+     ============================================================ */
+  const STORAGE_USERS   = "cassino_users_v1";
+  const STORAGE_SESSION = "cassino_session_v1";
+
+  const LOGIN_URL = "index.html";
+  const GAME_URL  = "laistiger.html";
+  const BONUS_URL = "regatebonus.html";  // ← se o nome real for outro, troque AQUI
+
+  /* ============================================================
+     HELPERS
+     ============================================================ */
+  const $ = (id) => document.getElementById(id);
+
+  function getUsers() {
+    try { return JSON.parse(localStorage.getItem(STORAGE_USERS)) || []; }
+    catch (e) { return []; }
+  }
+  function getSession() {
+    try { return localStorage.getItem(STORAGE_SESSION); }
+    catch (e) { return null; }
+  }
+  function clearSession() {
+    try { localStorage.removeItem(STORAGE_SESSION); } catch (e) {}
+  }
+
+  function formatCents(cents) {
+    const n = typeof cents === "number" ? cents : 0;
+    return (n / 100).toLocaleString("pt-BR", {
+      minimumFractionDigits: 2, maximumFractionDigits: 2,
+    });
+  }
+  function formatInt(n) {
+    return Number(n || 0).toLocaleString("pt-BR", { maximumFractionDigits: 0 });
+  }
+
+  function goTo(url) {
+    try { window.location.replace(url); }
+    catch (e) { window.location.href = url; }
+  }
+
+  /* ============================================================
+     RENDER
+     ============================================================ */
+  function renderUser(user) {
+    const name = user.username || "Jogador";
+    const isGuest = !!user.guest;
+
+    const avatar = $("avatar");
+    if (avatar) avatar.textContent = name.charAt(0).toUpperCase();
+
+    const nameEl = $("userName");
+    if (nameEl) nameEl.textContent = name;
+
+    const tagEl = $("userTag");
+    if (tagEl) tagEl.textContent = isGuest ? "Convidado" : "Jogador";
+
+    const warn = $("guestWarn");
+    if (warn) {
+      if (isGuest) warn.removeAttribute("hidden");
+      else warn.setAttribute("hidden", "");
+    }
+
+    const balEl = $("balanceValue");
+    if (balEl) balEl.textContent = formatCents(user.coins || 0);
+
+    const stats = user.stats || {};
+    const spinsEl = $("statSpins");
+    if (spinsEl) spinsEl.textContent = formatInt(stats.totalSpins || 0);
+
+    const bigEl = $("statBiggest");
+    if (bigEl) bigEl.textContent = "L$ " + formatCents(stats.biggestWin || 0);
+
+    const evEl = $("statEvents");
+    if (evEl) evEl.textContent = formatInt(stats.totalEvents || 0);
+
+    // Texto dinâmico do botão de bônus (não revela valor — só lembra)
+    const sub = $("bonusSub");
+    if (sub) {
+      const last = typeof user.lastBonusClaim === "number" ? user.lastBonusClaim : 0;
+      const dayMs = 24 * 60 * 60 * 1000;
+      const canClaim = (Date.now() - last) >= dayMs;
+      sub.textContent = canClaim
+        ? "Disponível agora — toque para resgatar"
+        : "Já resgatado hoje — volte amanhã";
+    }
+  }
+
+  /* ============================================================
+     AÇÕES
+     ============================================================ */
+  function bindLogout() {
+    const btn = $("logoutBtn");
+    if (!btn) return;
+    btn.addEventListener("click", () => {
+      clearSession();
+      goTo(LOGIN_URL);
+    });
+  }
+
+  function bindNavigation() {
+    const gameCard = $("gameCard");
+    if (gameCard) {
+      gameCard.addEventListener("click", (e) => {
+        // Deixa o href padrão acontecer; só garantimos que não há bloqueio
+        // (o href já aponta pra GAME_URL — mantido por consistência visual)
+      });
+    }
+    const bonusBtn = $("bonusBtn");
+    if (bonusBtn) {
+      // Nada a fazer: href já aponta pra BONUS_URL
+    }
+  }
+
+  /* ============================================================
+     BOOT — exige sessão válida
+     ============================================================ */
+  function boot() {
+    const splash = $("splash");
+    const wrap = $("wrap");
+
+    let user = null;
+    try {
+      const sid = getSession();
+      if (sid) {
+        const users = getUsers();
+        user = users.find(u => u.id === sid) || null;
+      }
+    } catch (e) { user = null; }
+
+    // Sessão inválida ou órfã → volta pro login
+    if (!user) {
+      clearSession();
+      goTo(LOGIN_URL);
+      return;
+    }
+
+    // Sessão válida — mostra a home
+    if (splash) splash.setAttribute("hidden", "");
+    if (wrap) wrap.removeAttribute("hidden");
+
+    renderUser(user);
+    bindLogout();
+    bindNavigation();
+
+    console.log("%c🏠 home.html", "color:#ffd700;font-size:14px;font-weight:900;");
+    console.log("Usuário:", user.username, user.guest ? "(convidado)" : "", "| L$:", formatCents(user.coins || 0));
+    console.log("Jogo:", GAME_URL, "| Bônus:", BONUS_URL);
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", boot, { once: true });
+  } else {
+    boot();
+  }
+})();
+</script>
+
+</body>
+</html>
