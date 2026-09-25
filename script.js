@@ -4,11 +4,12 @@
    UI + storage + execução. Não conhece as regras matemáticas.
    Depende de: regrasdeganhos.js v3 (deve vir ANTES no HTML)
 
-   COMPATÍVEL COM v3:
-   - SPECIAL_COMBINATIONS não existe mais (wild é coringa normal)
-   - calculateTheoreticalRTP() retorna objeto { rtp, breakdown }
-   - play() retorna linePayoutCents + eventBonusCents + eventWheelResult
-   - SPECIAL_EVENT soma a roleta por cima do payout das linhas
+   CORREÇÕES v3.3:
+   - init() NUNCA aborta quando já estamos na própria página
+     do jogo (index.html). Nesse caso, cria usuário convidado
+     temporário em memória para o jogo funcionar.
+   - Elimina o "tela morta": botões sempre recebem listeners.
+   - Aviso visual se regrasdeganhos.js não carregar.
    ============================================================ */
 
 (function () {
@@ -20,6 +21,16 @@
   const R = window.RegrasDeGanhos;
   if (!R) {
     console.error("regrasdeganhos.js não foi carregado. Abortando.");
+    // Aviso visual em vez de silêncio total
+    try {
+      const warn = document.createElement("div");
+      warn.style.cssText =
+        "position:fixed;inset:auto 12px 12px 12px;z-index:99999;" +
+        "background:#7f1d1d;color:#fff;padding:12px 16px;border-radius:12px;" +
+        "font:600 14px Inter,system-ui,sans-serif;box-shadow:0 8px 24px rgba(0,0,0,.5)";
+      warn.textContent = "⚠ regrasdeganhos.js não carregou. Verifique o caminho do arquivo.";
+      document.body.appendChild(warn);
+    } catch (e) {}
     return;
   }
 
@@ -71,6 +82,8 @@
   };
   let debugVisible = false;
 
+  let redirecting = false;
+
   const $ = (id) => document.getElementById(id);
 
   /* ============================================================
@@ -98,6 +111,31 @@
     el._timer = setTimeout(() => el.classList.remove("show"), 2400);
   }
 
+  function currentFileName() {
+    try {
+      const p = window.location.pathname || "";
+      const last = p.split("/").pop() || "";
+      return last.toLowerCase();
+    } catch (e) { return ""; }
+  }
+
+  /**
+   * Redirecionamento seguro contra loop.
+   * Retorna true se disparou, false se já estamos no destino.
+   */
+  function safeRedirect(url) {
+    if (redirecting) return false;
+    let targetFile = "";
+    try {
+      targetFile = String(url).split("/").pop().split("#")[0].split("?")[0].toLowerCase();
+    } catch (e) { targetFile = ""; }
+    const here = currentFileName();
+    if (here && targetFile && here === targetFile) return false;
+    redirecting = true;
+    window.location.replace(url);
+    return true;
+  }
+
   function setState(newState) {
     currentState = newState;
     const lbl = $("stateLabel");
@@ -113,15 +151,40 @@
     if (debugVisible) { const dbg = $("dbgEvent"); if (dbg) dbg.textContent = s; }
   }
 
-  /**
-   * Helper: lê o RTP teórico como NÚMERO PERCENTUAL.
-   * A v3 retorna { rtp, rtpFraction, breakdown }.
-   */
   function getTheoreticalRTPPercent() {
     const res = GameEngine.calculateTheoreticalRTP();
-    if (typeof res === "number") return res * 100;     // compat v2
-    if (res && typeof res.rtp === "number") return res.rtp; // v3
+    if (typeof res === "number") return res * 100;
+    if (res && typeof res.rtp === "number") return res.rtp;
     return 0;
+  }
+
+  /* ============================================================
+     RESOLUÇÃO DE SÍMBOLO
+     ============================================================ */
+  function resolveSymbol(s) {
+    if (s == null) return null;
+    if (typeof s === "object" && s.icon) return s;
+    if (typeof s === "string") {
+      const byId = (typeof getSymbolById === "function") ? getSymbolById(s) : null;
+      if (byId) return byId;
+      if (SYMBOL_TABLE && SYMBOL_TABLE[s]) return SYMBOL_TABLE[s];
+      return null;
+    }
+    if (typeof s === "number") {
+      if (Array.isArray(SYMBOLS) && SYMBOLS[s]) {
+        const cand = SYMBOLS[s];
+        if (typeof cand === "object" && cand.icon) return cand;
+        if (typeof cand === "string") return resolveSymbol(cand);
+      }
+      return null;
+    }
+    return null;
+  }
+
+  function symbolHTML(sy) {
+    const obj = resolveSymbol(sy);
+    if (!obj) return "";
+    return SVG[obj.icon] || `<span>${obj.id}</span>`;
   }
 
   /* ============================================================
@@ -134,6 +197,11 @@
 
   function updateCurrentUser(updates) {
     if (!currentUser) return;
+    // Se for convidado temporário, apenas atualiza em memória.
+    if (currentUser.guest) {
+      Object.assign(currentUser, updates);
+      return;
+    }
     const users = getUsers();
     const idx = users.findIndex(u => u.id === currentUser.id);
     if (idx >= 0) { users[idx] = { ...users[idx], ...updates }; saveUsers(users); currentUser = users[idx]; }
@@ -246,7 +314,6 @@
     orange:  `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><defs><radialGradient id="orangeOrange" cx="35%" cy="35%" r="65%"><stop offset="0%" stop-color="#ffb74d"/><stop offset="60%" stop-color="#ff6f00"/><stop offset="100%" stop-color="#8b3a00"/></radialGradient></defs><circle cx="50" cy="55" r="35" fill="url(#orangeOrange)" stroke="#5a2200" stroke-width="1.5"/><ellipse cx="38" cy="42" rx="8" ry="12" fill="#fff" opacity="0.4"/><path d="M50 20 Q55 12 60 15 Q58 22 52 22 Z" fill="#4caf50" stroke="#2e5c1a"/></svg>`,
     star:    `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="starGold" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#fff5cc"/><stop offset="50%" stop-color="#ffd700"/><stop offset="100%" stop-color="#b8860b"/></linearGradient></defs><path d="M50 10 L61 40 L92 40 L67 60 L76 90 L50 72 L24 90 L33 60 L8 40 L39 40 Z" fill="url(#starGold)" stroke="#6b4f0a" stroke-width="1.5"/></svg>`,
   };
-  function symbolHTML(sy) { if (!sy) return ""; return SVG[sy.icon] || `<span>${sy.id}</span>`; }
 
   /* ============================================================
      UI HELPERS
@@ -284,13 +351,6 @@
     if (title) title.textContent = `AUTO-SPIN: ${autoSpin.totalRounds}`;
   }
 
-  /**
-   * Paytable lateral — v3 não tem SPECIAL_COMBINATIONS.
-   * Mostra:
-   *   1. Tabela de pay3 por símbolo
-   *   2. Linha especial (raro + wild + raro) → paga pay3 do raro
-   *   3. Faixas de tier (VITÓRIA/BIG/MEGA/SUPER/JACKPOT)
-   */
   function renderPaytable() {
     const listEl = $("paytableList");
     if (!listEl) return;
@@ -304,7 +364,6 @@
 
     html += `<div style="height:8px"></div>`;
 
-    // Linha especial: raro + wild + raro (paga pay3 do raro)
     const specialRares = ["crown", "seven", "diamond"];
     specialRares.forEach(id => {
       const sym = SYMBOL_TABLE[id];
@@ -343,6 +402,26 @@
   }
 
   /* ============================================================
+     LOCALIZAÇÃO DOS STRIPS
+     ------------------------------------------------------------
+     No HTML atual, os strips têm IDs: strip0, strip1, strip2.
+     Mantemos fallback para classes/data-attrs por segurança.
+     ============================================================ */
+  function getStrip(colIndex) {
+    let el = document.getElementById("strip" + colIndex);
+    if (el) return el;
+    el = document.querySelector(`[data-strip="${colIndex}"]`);
+    if (el) return el;
+    const reel = document.querySelector(`.reel[data-reel="${colIndex}"]`);
+    if (reel) {
+      const s = reel.querySelector(".reel-strip, .strip, [data-strip]");
+      if (s) return s;
+      if (reel.firstElementChild) return reel.firstElementChild;
+    }
+    return null;
+  }
+
+  /* ============================================================
      ANIMAÇÃO DE REELS
      ============================================================ */
   const STRIP_LENGTH = 20;
@@ -367,8 +446,11 @@
   }
   function applyGridDirect(grid) {
     for (let c = 0; c < 3; c++) {
-      const strip = $("strip" + c);
-      if (!strip) continue;
+      const strip = getStrip(c);
+      if (!strip) {
+        console.warn("Strip não encontrado para coluna", c);
+        continue;
+      }
       strip.innerHTML = "";
       strip.style.transition = "none";
       for (let r = 0; r < 3; r++) {
@@ -382,7 +464,7 @@
   }
   function spinReelToResult(colIndex, finalSymbols, durationMs, useTurbo) {
     return new Promise(resolve => {
-      const strip = $("strip" + colIndex);
+      const strip = getStrip(colIndex);
       if (!strip) { resolve(); return; }
       const itemH = getSymbolH();
       buildStripForAnimation(strip, finalSymbols);
@@ -530,7 +612,7 @@
         if (cardValue) cardValue.textContent = "L$ " + formatCents(result.finalWinCents);
         if (cardSymbols) {
           const winningSymbols = result.wins && result.wins.length > 0
-            ? result.wins[0].rawSymbols.map(id => getSymbolById(id)).filter(Boolean)
+            ? result.wins[0].rawSymbols.map(id => resolveSymbol(id)).filter(Boolean)
             : [];
           cardSymbols.innerHTML = winningSymbols.map(s => `<span>${symbolHTML(s)}</span>`).join("");
         }
@@ -612,12 +694,7 @@
   }
 
   /* ============================================================
-     EVENTO ESPECIAL (barra de progresso → roleta)
-     ------------------------------------------------------------
-     IMPORTANTE: a roleta aqui é um SISTEMA SEPARADO do
-     SPECIAL_EVENT da categoria. Este é gatilhado por progresso
-     acumulado. O da categoria é gatilhado por sorteio.
-     Os dois SOMAM no saldo, mas são independentes.
+     EVENTO ESPECIAL
      ============================================================ */
   function getEventProgress() {
     if (!currentUser) return 0;
@@ -959,7 +1036,7 @@
   async function spin() {
     if (currentState !== GAME_STATES.IDLE) return;
     if (autoSpin.active) return;
-    if (currentUser.coins < currentBetCents) {
+    if (!currentUser || currentUser.coins < currentBetCents) {
       vibrate([40, 40, 40]);
       toast("L$ insuficientes", "error");
       const el = $("balanceValue");
@@ -1000,7 +1077,7 @@
 
   async function startAutoSpin() {
     if (autoSpin.active || currentState !== GAME_STATES.IDLE) return;
-    if (currentUser.coins < currentBetCents) {
+    if (!currentUser || currentUser.coins < currentBetCents) {
       toast("L$ insuficientes", "error");
       return;
     }
@@ -1029,7 +1106,7 @@
 
     for (let i = 0; i < autoSpin.totalRounds; i++) {
       if (autoSpin.cancelRequested) break;
-      if (currentUser.coins < currentBetCents) {
+      if (!currentUser || currentUser.coins < currentBetCents) {
         toast("Saldo insuficiente, parando", "error");
         break;
       }
@@ -1232,67 +1309,112 @@
   /* ============================================================
      NAVEGAÇÃO
      ============================================================ */
-  function goHome() { vibrate(10); window.location.href = "home.html"; }
-  function goHistory() { vibrate(10); window.location.href = "home.html#historico"; }
-  function goToBonus() { vibrate(10); window.location.href = "regatebonus.html"; }
+  function goHome() { vibrate(10); safeRedirect("home.html"); }
+  function goHistory() { vibrate(10); safeRedirect("home.html#historico"); }
+  function goToBonus() { vibrate(10); safeRedirect("regatebonus.html"); }
 
   /* ============================================================
      INIT
+     ------------------------------------------------------------
+     REGRA DE OURO:
+     - Se houver sessão VÁLIDA → usa o usuário.
+     - Se NÃO houver sessão:
+         * se estamos numa página que NÃO é a do login (ex.: jogo.html),
+           redireciona UMA vez para index.html e aborta.
+         * se JÁ estamos na index.html (a própria página do jogo),
+           cria um CONVIDADO temporário em memória e segue o jogo.
+     Assim nunca há loop e nunca há tela morta.
      ============================================================ */
-  (function init() {
+  function boot() {
     const sessionId = getSession();
-    if (!sessionId) { window.location.replace("index.html"); return; }
+    let user = null;
 
-    const users = getUsers();
-    const user = users.find(u => u.id === sessionId);
-    if (!user) { clearSession(); window.location.replace("index.html"); return; }
-
-    currentUser = user;
-    if (typeof currentUser.coins !== "number") {
-      currentUser.coins = 1000;
-      updateCurrentUser({ coins: 1000 });
+    if (sessionId) {
+      const users = getUsers();
+      user = users.find(u => u.id === sessionId) || null;
+      if (!user) {
+        // Sessão apontando para usuário inexistente — limpa.
+        clearSession();
+      }
     }
-    if (typeof currentUser.eventProgress !== "number") {
-      updateCurrentUser({ eventProgress: 0 });
-    }
-    if (!currentUser.stats) updateCurrentUser({ stats: {} });
 
+    if (!user) {
+      // Sem sessão válida. Decide entre redirecionar ou criar convidado.
+      const here = currentFileName();
+      const loginPage = "index.html";
+      const isLoginPage = (here === "" || here === loginPage);
+
+      if (!isLoginPage) {
+        // Estamos numa página que não é o login → manda para o login.
+        if (safeRedirect(loginPage)) return;
+        // Se safeRedirect não disparou (loop evitado), segue com convidado.
+      }
+
+      // Fallback: convidado temporário em memória (não persiste em localStorage).
+      user = {
+        id: "guest_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
+        username: "Convidado",
+        guest: true,
+        coins: 1000,
+        stats: {},
+        eventProgress: 0,
+        createdAt: Date.now(),
+      };
+      currentUser = user;
+      console.warn("[script.js] Sessão ausente — rodando como convidado temporário.");
+    } else {
+      currentUser = user;
+      if (typeof currentUser.coins !== "number") {
+        currentUser.coins = 1000;
+        updateCurrentUser({ coins: 1000 });
+      }
+      if (typeof currentUser.eventProgress !== "number") {
+        updateCurrentUser({ eventProgress: 0 });
+      }
+      if (!currentUser.stats) updateCurrentUser({ stats: {} });
+    }
+
+    // A partir daqui SEMPRE temos currentUser.
     renderBalance();
     renderBetUI();
     renderTurboUI();
     renderAutoSelectorUI();
     renderPaytable();
 
+    // Símbolos iniciais via ID (compatível com v3)
     const initialGrid = [
-      [SYMBOLS[7], SYMBOLS[0], SYMBOLS[1]],
-      [SYMBOLS[7], SYMBOLS[2], SYMBOLS[3]],
-      [SYMBOLS[7], SYMBOLS[4], SYMBOLS[5]],
-    ];
+      [resolveSymbol("crown"), resolveSymbol("bell"),  resolveSymbol("cherry")],
+      [resolveSymbol("crown"), resolveSymbol("lemon"), resolveSymbol("orange")],
+      [resolveSymbol("crown"), resolveSymbol("star"),  resolveSymbol("seven")],
+    ].map(col => col.map(s => s || resolveSymbol("cherry")));
 
-    setTimeout(() => {
-      applyGridDirect(initialGrid);
-      setTimeout(() => {
-        for (let c = 0; c < 3; c++) {
-          document.querySelector(`.reel[data-reel="${c}"]`)?.classList.add("win");
-        }
-        drawPaylines([{ line: 0, coords: [[0,0],[1,0],[2,0]] }]);
-        flashWin();
-        playJackpot();
-        emitSoftGlow(true);
-        emitGoldParticles(60, { x: 0.5, y: 0.4 });
-        vibrate([80, 40, 80, 40, 150]);
-
-        const lr = $("lastResult");
-        if (lr) { lr.textContent = `🎉 Bem-vindo! Boa sorte!`; lr.className = "last-result win"; }
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        applyGridDirect(initialGrid);
 
         setTimeout(() => {
-          clearWinningSymbols();
-          clearPaylines();
-          const lr2 = $("lastResult");
-          if (lr2) { lr2.textContent = "Aposte e gire para começar"; lr2.className = "last-result"; }
-        }, 3000);
-      }, 700);
-    }, 300);
+          for (let c = 0; c < 3; c++) {
+            document.querySelector(`.reel[data-reel="${c}"]`)?.classList.add("win");
+          }
+          drawPaylines([{ line: 0, coords: [[0,0],[1,0],[2,0]] }]);
+          flashWin();
+          playJackpot();
+          emitSoftGlow(true);
+          emitGoldParticles(60, { x: 0.5, y: 0.4 });
+          vibrate([80, 40, 80, 40, 150]);
+
+          const lr = $("lastResult");
+          if (lr) { lr.textContent = `🎉 Bem-vindo! Boa sorte!`; lr.className = "last-result win"; }
+
+          setTimeout(() => {
+            clearWinningSymbols();
+            clearPaylines();
+            const lr2 = $("lastResult");
+            if (lr2) { lr2.textContent = "Aposte e gire para começar"; lr2.className = "last-result"; }
+          }, 3000);
+        }, 700);
+      });
+    });
 
     const betMinus = $("betMinus");
     const betPlus = $("betPlus");
@@ -1363,12 +1485,18 @@
 
     const rtp = getTheoreticalRTPPercent();
     console.log("%c🎰 Tigrinho · Módulos carregados (v3)", "color:#ffd700;font-size:16px;font-weight:900;");
-    console.log("Motor:", "regrasdeganhos.js v3");
+    console.log("Motor:", "regrasdeganhos.js v3.2");
     console.log("UI:", "script.js");
-    console.log("Usuário:", currentUser.username, "| L$:", currentUser.coins);
+    console.log("Usuário:", currentUser.username, currentUser.guest ? "(convidado)" : "", "| L$:", currentUser.coins);
     console.log("RTP teórico:", rtp.toFixed(2) + "%");
     console.log("Categorias:", CATEGORY_ORDER.map(k => `${k} ${(OUTCOME_CATEGORIES[k].chance*100).toFixed(0)}%`).join(" · "));
-  })();
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", boot, { once: true });
+  } else {
+    boot();
+  }
 
   /* ============================================================
      EXPORTAÇÃO PARA O HTML (onclick="...")
