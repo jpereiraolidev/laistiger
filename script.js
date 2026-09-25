@@ -4,12 +4,14 @@
    UI + storage + execução. Não conhece as regras matemáticas.
    Depende de: regrasdeganhos.js v3 (deve vir ANTES no HTML)
 
-   CORREÇÕES v3.3:
-   - init() NUNCA aborta quando já estamos na própria página
-     do jogo (index.html). Nesse caso, cria usuário convidado
-     temporário em memória para o jogo funcionar.
-   - Elimina o "tela morta": botões sempre recebem listeners.
-   - Aviso visual se regrasdeganhos.js não carregar.
+   v3.4 — Otimizado para mobile:
+   - [hidden] usado em overlays/modais/painéis (compatível com
+     o index.html novo que marca esses elementos com hidden)
+   - Cache de SVG + pool de elementos nos strips
+   - Throttle de áudio, partículas reduzidas em mobile
+   - Contador de prêmio a 30fps em mobile
+   - Auto-spin pausa quando aba perde foco
+   - will-change aplicado só durante o giro
    ============================================================ */
 
 (function () {
@@ -21,7 +23,6 @@
   const R = window.RegrasDeGanhos;
   if (!R) {
     console.error("regrasdeganhos.js não foi carregado. Abortando.");
-    // Aviso visual em vez de silêncio total
     try {
       const warn = document.createElement("div");
       warn.style.cssText =
@@ -53,6 +54,21 @@
   const GAME_STATES = { IDLE: "idle", SPINNING: "spinning", RESULT: "result", WIN: "win", SUPER_WIN: "super-win", EVENT: "event" };
 
   /* ============================================================
+     DETECÇÃO DE AMBIENTE
+     ============================================================ */
+  const IS_MOBILE = (() => {
+    try {
+      return window.matchMedia("(max-width: 640px)").matches ||
+             /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || "");
+    } catch (e) { return false; }
+  })();
+
+  const PREFERS_REDUCED_MOTION = (() => {
+    try { return window.matchMedia("(prefers-reduced-motion: reduce)").matches; }
+    catch (e) { return false; }
+  })();
+
+  /* ============================================================
      ESTADO
      ============================================================ */
   let currentState = GAME_STATES.IDLE;
@@ -74,6 +90,7 @@
   let turboActive = false;
   let audioCtx = null;
   let userGestureReceived = false;
+  let _paytableRendered = false;
 
   let sessionStats = {
     spins: 0, wagered: 0, won: 0, hits: 0,
@@ -111,6 +128,10 @@
     el._timer = setTimeout(() => el.classList.remove("show"), 2400);
   }
 
+  /* Helpers para [hidden] (compatível com index.html novo) */
+  function show(el) { if (el) el.removeAttribute("hidden"); }
+  function hide(el) { if (el) el.setAttribute("hidden", ""); }
+
   function currentFileName() {
     try {
       const p = window.location.pathname || "";
@@ -119,10 +140,6 @@
     } catch (e) { return ""; }
   }
 
-  /**
-   * Redirecionamento seguro contra loop.
-   * Retorna true se disparou, false se já estamos no destino.
-   */
   function safeRedirect(url) {
     if (redirecting) return false;
     let targetFile = "";
@@ -181,12 +198,6 @@
     return null;
   }
 
-  function symbolHTML(sy) {
-    const obj = resolveSymbol(sy);
-    if (!obj) return "";
-    return SVG[obj.icon] || `<span>${obj.id}</span>`;
-  }
-
   /* ============================================================
      STORAGE
      ============================================================ */
@@ -197,11 +208,7 @@
 
   function updateCurrentUser(updates) {
     if (!currentUser) return;
-    // Se for convidado temporário, apenas atualiza em memória.
-    if (currentUser.guest) {
-      Object.assign(currentUser, updates);
-      return;
-    }
+    if (currentUser.guest) { Object.assign(currentUser, updates); return; }
     const users = getUsers();
     const idx = users.findIndex(u => u.id === currentUser.id);
     if (idx >= 0) { users[idx] = { ...users[idx], ...updates }; saveUsers(users); currentUser = users[idx]; }
@@ -236,11 +243,24 @@
      ÁUDIO
      ============================================================ */
   function getAudio() {
-    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { return null; } }
+    if (!audioCtx) {
+      try {
+        const Ctor = window.AudioContext || window.webkitAudioContext;
+        audioCtx = new Ctor({ latencyHint: "interactive" });
+      } catch { return null; }
+    }
     if (audioCtx.state === "suspended") audioCtx.resume();
     return audioCtx;
   }
+
+  // Throttle global: evita criar ~20 osciladores/s durante o giro
+  let _lastTickTime = 0;
+  const TICK_MIN_INTERVAL = IS_MOBILE ? 55 : 35;
+
   function playTick() {
+    const now = performance.now();
+    if (now - _lastTickTime < TICK_MIN_INTERVAL) return;
+    _lastTickTime = now;
     const ctx = getAudio(); if (!ctx) return;
     const o = ctx.createOscillator(), g = ctx.createGain();
     o.connect(g); g.connect(ctx.destination); o.type = "square";
@@ -316,6 +336,40 @@
   };
 
   /* ============================================================
+     CACHE DE SVG
+     ------------------------------------------------------------
+     Cada ícone é parseado UMA vez (via <template>) e depois só
+     clonado. Evita criar dezenas de strings de SVG por giro.
+     ============================================================ */
+  const _svgCache = Object.create(null);
+  function svgFor(icon) {
+    if (!(icon in _svgCache)) {
+      const raw = SVG[icon];
+      if (!raw) { _svgCache[icon] = null; return null; }
+      const tpl = document.createElement("template");
+      tpl.innerHTML = raw.trim();
+      _svgCache[icon] = tpl.content.firstElementChild;
+    }
+    return _svgCache[icon];
+  }
+  function symbolNode(sy) {
+    const obj = resolveSymbol(sy);
+    if (!obj) return null;
+    const node = svgFor(obj.icon);
+    if (!node) {
+      const s = document.createElement("span");
+      s.textContent = obj.id;
+      return s;
+    }
+    return node.cloneNode(true);
+  }
+  function symbolHTML(sy) {
+    const obj = resolveSymbol(sy);
+    if (!obj) return "";
+    return SVG[obj.icon] || `<span>${obj.id}</span>`;
+  }
+
+  /* ============================================================
      UI HELPERS
      ============================================================ */
   function renderBalance(animate = false) {
@@ -352,8 +406,10 @@
   }
 
   function renderPaytable() {
+    if (_paytableRendered) return;
     const listEl = $("paytableList");
     if (!listEl) return;
+    _paytableRendered = true;
 
     const ordered = [...ROLLABLE_SYMBOLS].sort((a, b) => b.pay3 - a.pay3);
     let html = ordered.map(sy => `
@@ -397,15 +453,15 @@
   function toggleDebug() {
     debugVisible = !debugVisible;
     const panel = $("debugPanel");
-    if (panel) panel.classList.toggle("show", debugVisible);
+    if (panel) {
+      if (debugVisible) show(panel);
+      else hide(panel);
+    }
     if (debugVisible) updateDebugPanel();
   }
 
   /* ============================================================
      LOCALIZAÇÃO DOS STRIPS
-     ------------------------------------------------------------
-     No HTML atual, os strips têm IDs: strip0, strip1, strip2.
-     Mantemos fallback para classes/data-attrs por segurança.
      ============================================================ */
   function getStrip(colIndex) {
     let el = document.getElementById("strip" + colIndex);
@@ -422,70 +478,101 @@
   }
 
   /* ============================================================
-     ANIMAÇÃO DE REELS
+     ANIMAÇÃO DE REELS — com pool de elementos e SVG cache
      ============================================================ */
-  const STRIP_LENGTH = 20;
+  const STRIP_LENGTH_NORMAL = 20;
+  const STRIP_LENGTH_TURBO  = 8;
+
   function getSymbolH() {
     const cs = getComputedStyle(document.documentElement);
-    return parseFloat(cs.getPropertyValue("--symbol-h")) || 82;
+    return parseFloat(cs.getPropertyValue("--symbol-h")) || 78;
   }
-  function buildStripForAnimation(stripEl, finalSymbols) {
-    stripEl.innerHTML = "";
-    const items = [];
-    for (let i = 0; i < STRIP_LENGTH; i++) items.push(GameEngine.rollSymbol());
-    items.push(finalSymbols[0], finalSymbols[1], finalSymbols[2]);
-    for (let i = 0; i < 3; i++) items.push(GameEngine.rollSymbol());
-    for (const sy of items) {
+
+  function ensureStripPool(stripEl, totalItems) {
+    const current = stripEl.children.length;
+    if (current === totalItems) return;
+    if (current > totalItems) {
+      while (stripEl.children.length > totalItems) stripEl.removeChild(stripEl.lastChild);
+      return;
+    }
+    const frag = document.createDocumentFragment();
+    for (let i = current; i < totalItems; i++) {
       const el = document.createElement("div");
       el.className = "symbol";
-      el.innerHTML = symbolHTML(sy);
-      stripEl.appendChild(el);
+      frag.appendChild(el);
     }
-    stripEl.style.transition = "none";
-    stripEl.style.transform = "translateY(0px)";
+    stripEl.appendChild(frag);
   }
+
+  function setSymbolInSlot(slot, symbol) {
+    slot.textContent = "";
+    const node = symbolNode(symbol);
+    if (node) slot.appendChild(node);
+  }
+
+  function buildStripForAnimation(stripEl, finalSymbols, totalItems) {
+    ensureStripPool(stripEl, totalItems);
+    const kids = stripEl.children;
+    const before = totalItems - 6; // 3 finais + 3 depois
+
+    for (let i = 0; i < before; i++) setSymbolInSlot(kids[i], GameEngine.rollSymbol());
+    setSymbolInSlot(kids[before],     finalSymbols[0]);
+    setSymbolInSlot(kids[before + 1], finalSymbols[1]);
+    setSymbolInSlot(kids[before + 2], finalSymbols[2]);
+    for (let i = before + 3; i < totalItems; i++) setSymbolInSlot(kids[i], GameEngine.rollSymbol());
+
+    stripEl.style.transition = "none";
+    stripEl.style.transform = "translate3d(0,0,0)";
+  }
+
   function applyGridDirect(grid) {
     for (let c = 0; c < 3; c++) {
       const strip = getStrip(c);
-      if (!strip) {
-        console.warn("Strip não encontrado para coluna", c);
-        continue;
-      }
-      strip.innerHTML = "";
+      if (!strip) { console.warn("Strip não encontrado para coluna", c); continue; }
+      ensureStripPool(strip, 3);
+      const kids = strip.children;
+      for (let r = 0; r < 3; r++) setSymbolInSlot(kids[r], grid[c][r]);
       strip.style.transition = "none";
-      for (let r = 0; r < 3; r++) {
-        const el = document.createElement("div");
-        el.className = "symbol";
-        el.innerHTML = symbolHTML(grid[c][r]);
-        strip.appendChild(el);
-      }
-      strip.style.transform = "translateY(0px)";
+      strip.style.transform = "translate3d(0,0,0)";
     }
   }
+
   function spinReelToResult(colIndex, finalSymbols, durationMs, useTurbo) {
     return new Promise(resolve => {
       const strip = getStrip(colIndex);
       if (!strip) { resolve(); return; }
       const itemH = getSymbolH();
-      buildStripForAnimation(strip, finalSymbols);
+      const scrollLength = useTurbo ? STRIP_LENGTH_TURBO : STRIP_LENGTH_NORMAL;
+      const totalItems = scrollLength + 6;
+
+      strip.style.willChange = "transform";
+      buildStripForAnimation(strip, finalSymbols, totalItems);
       void strip.offsetWidth;
+
       strip.style.transition = `transform ${durationMs}ms cubic-bezier(0.15, 0.85, 0.35, 1)`;
-      const finalOffset = -(STRIP_LENGTH) * itemH;
-      strip.style.transform = `translateY(${finalOffset}px)`;
+      const finalOffset = -scrollLength * itemH;
+      strip.style.transform = `translate3d(0, ${finalOffset}px, 0)`;
+
       let ticks = 0;
-      const tickMs = useTurbo ? 40 : 70;
+      const tickMs = useTurbo ? 55 : 70;
       const maxTicks = Math.floor(durationMs / tickMs);
       const tickInterval = setInterval(() => {
         if (ticks++ > maxTicks) { clearInterval(tickInterval); return; }
         playTick();
       }, tickMs);
-      const onEnd = () => {
+
+      let finished = false;
+      const done = () => {
+        if (finished) return;
+        finished = true;
         strip.removeEventListener("transitionend", onEnd);
         clearInterval(tickInterval);
+        strip.style.willChange = "";
         resolve();
       };
-      strip.addEventListener("transitionend", onEnd);
-      setTimeout(() => { clearInterval(tickInterval); resolve(); }, durationMs + 200);
+      const onEnd = () => done();
+      strip.addEventListener("transitionend", onEnd, { once: true });
+      setTimeout(done, durationMs + 150);
     });
   }
 
@@ -514,8 +601,13 @@
   function clearWinningSymbols() {
     document.querySelectorAll(".reel").forEach(r => r.classList.remove("win", "super-win"));
   }
+
   function emitGoldParticles(count, origin = { x: 0.5, y: 0.5 }) {
-    for (let i = 0; i < count; i++) {
+    if (PREFERS_REDUCED_MOTION) return;
+    const max = IS_MOBILE ? 25 : count;
+    const frag = document.createDocumentFragment();
+    const created = [];
+    for (let i = 0; i < max; i++) {
       const p = document.createElement("div");
       p.className = "gold-particle";
       const angle = Math.random() * Math.PI * 2;
@@ -527,19 +619,33 @@
       p.style.setProperty("--dx", dx + "px");
       p.style.setProperty("--dy", dy + "px");
       p.style.animationDelay = (Math.random() * 0.3) + "s";
-      document.body.appendChild(p);
-      setTimeout(() => p.remove(), 3000);
+      frag.appendChild(p);
+      created.push(p);
     }
+    document.body.appendChild(frag);
+    setTimeout(() => { for (const p of created) p.remove(); }, 3000);
   }
+
   function emitSoftGlow(isSuper) {
+    if (PREFERS_REDUCED_MOTION) return;
     if (typeof confetti !== "function") return;
+    if (IS_MOBILE && !isSuper) return; // glow pequeno só no desktop
     const cores = ["#ffd700", "#f5c542", "#b8860b", "#8a6d1a"];
-    if (isSuper) {
-      confetti({ particleCount: 60, spread: 100, origin: { y: 0.5 }, colors: cores, scalar: 0.8, gravity: 0.4, drift: 0.2, ticks: 200, shapes: ["circle"], opacity: 0.6 });
-    } else {
-      confetti({ particleCount: 25, spread: 60, origin: { y: 0.5 }, colors: cores, scalar: 0.7, gravity: 0.4, ticks: 150, shapes: ["circle"], opacity: 0.5 });
-    }
+    confetti({
+      particleCount: isSuper ? (IS_MOBILE ? 30 : 60) : 25,
+      spread: isSuper ? 100 : 60,
+      origin: { y: 0.5 },
+      colors: cores,
+      scalar: isSuper ? 0.8 : 0.7,
+      gravity: 0.4,
+      drift: isSuper ? 0.2 : 0,
+      ticks: isSuper ? 150 : 120,
+      shapes: ["circle"],
+      opacity: isSuper ? 0.6 : 0.5,
+      disableForReducedMotion: true,
+    });
   }
+
   function animatePrizeCounter(finalCents, betCents, winType) {
     return new Promise(resolve => {
       const el = $("winValue");
@@ -550,8 +656,17 @@
       else if (id === "MEGA") durationMs = 1800;
       else if (id === "BIG") durationMs = 1200;
       else durationMs = 700;
+
+      const frameMs = IS_MOBILE ? 33 : 16;
       const start = performance.now();
+      let lastPaint = 0;
+
       const update = (now) => {
+        if (now - lastPaint < frameMs) {
+          if ((now - start) < durationMs) requestAnimationFrame(update);
+          return;
+        }
+        lastPaint = now;
         const progress = Math.min((now - start) / durationMs, 1);
         const eased = 1 - Math.pow(1 - progress, 3);
         const currentCents = Math.floor(finalCents * eased);
@@ -562,6 +677,7 @@
       requestAnimationFrame(update);
     });
   }
+
   async function showWinOverlay(result) {
     return new Promise(async (resolve) => {
       const overlay = $("winOverlay");
@@ -598,7 +714,10 @@
         document.body.classList.add("dimmed");
         setTimeout(() => document.body.classList.remove("dimmed"), 2600);
       }
+
+      show(overlay);
       overlay.classList.add("show");
+
       await new Promise(r => setTimeout(r, 500));
       if (winType.id !== "NORMAL" && multEl) {
         multEl.textContent = "×" + totalMultLabel;
@@ -620,11 +739,13 @@
         await new Promise(r => setTimeout(r, isSuper ? 2000 : 1200));
       }
       overlay.classList.remove("show");
+      hide(overlay);
       if (label) label.classList.remove("big", "mega", "super");
       if (card) card.classList.remove("show");
       resolve();
     });
   }
+
   function drawPaylines(wins) {
     const svg = $("paylineSvg");
     const overlay = $("paylineOverlay");
@@ -745,6 +866,7 @@
     if (prizeValue) { prizeValue.textContent = "L$ 0,00"; prizeValue.classList.remove("reveal"); }
     if (stars) stars.classList.remove("reveal");
 
+    show(overlay);
     overlay.classList.add("show");
     setEventState(EVENT_STATES.SPINNING);
     vibrate([60, 30, 60, 30, 120]);
@@ -820,6 +942,7 @@
 
     setEventState(EVENT_STATES.FINISHED);
     overlay.classList.remove("show");
+    hide(overlay);
 
     setEventProgress(0);
     setEventState(EVENT_STATES.LOCKED);
@@ -1005,11 +1128,7 @@
         saldo: currentUser.coins, ts: Date.now(), mode: currentMode,
       });
 
-      persistUserStats({
-        hit: false,
-        wagered: currentBetCents,
-        won: 0,
-      });
+      persistUserStats({ hit: false, wagered: currentBetCents, won: 0 });
     }
 
     setState(GAME_STATES.IDLE);
@@ -1098,14 +1217,21 @@
     const historyListEl = $("autoHistoryList");
     const summaryEl = $("autoSummary");
 
-    if (progressEl) progressEl.classList.add("show");
-    if (historyCardEl) historyCardEl.classList.add("show");
+    if (progressEl) show(progressEl);
+    if (historyCardEl) show(historyCardEl);
     if (historyListEl) historyListEl.innerHTML = "";
     if (summaryEl) summaryEl.textContent = "";
     updateAutoProgress();
 
     for (let i = 0; i < autoSpin.totalRounds; i++) {
       if (autoSpin.cancelRequested) break;
+
+      // Pausa se aba perder foco (evita rodar em background)
+      while (document.hidden && !autoSpin.cancelRequested) {
+        await new Promise(r => setTimeout(r, 200));
+      }
+      if (autoSpin.cancelRequested) break;
+
       if (!currentUser || currentUser.coins < currentBetCents) {
         toast("Saldo insuficiente, parando", "error");
         break;
@@ -1204,7 +1330,7 @@
     setTimeout(() => {
       if (!autoSpin.active) {
         const p = $("autoProgress");
-        if (p) p.classList.remove("show");
+        if (p) hide(p);
       }
     }, 2000);
 
@@ -1214,8 +1340,16 @@
   /* ============================================================
      MODAIS
      ============================================================ */
-  function openModal(id) { const el = $(id); if (el) el.classList.add("show"); }
-  function closeModal(id) { const el = $(id); if (el) el.classList.remove("show"); }
+  function openModal(id) {
+    const el = $(id); if (!el) return;
+    show(el);
+    el.classList.add("show");
+  }
+  function closeModal(id) {
+    const el = $(id); if (!el) return;
+    el.classList.remove("show");
+    hide(el);
+  }
 
   function openInfo() {
     const body = $("infoModalBody");
@@ -1315,15 +1449,6 @@
 
   /* ============================================================
      INIT
-     ------------------------------------------------------------
-     REGRA DE OURO:
-     - Se houver sessão VÁLIDA → usa o usuário.
-     - Se NÃO houver sessão:
-         * se estamos numa página que NÃO é a do login (ex.: jogo.html),
-           redireciona UMA vez para index.html e aborta.
-         * se JÁ estamos na index.html (a própria página do jogo),
-           cria um CONVIDADO temporário em memória e segue o jogo.
-     Assim nunca há loop e nunca há tela morta.
      ============================================================ */
   function boot() {
     const sessionId = getSession();
@@ -1332,25 +1457,18 @@
     if (sessionId) {
       const users = getUsers();
       user = users.find(u => u.id === sessionId) || null;
-      if (!user) {
-        // Sessão apontando para usuário inexistente — limpa.
-        clearSession();
-      }
+      if (!user) clearSession();
     }
 
     if (!user) {
-      // Sem sessão válida. Decide entre redirecionar ou criar convidado.
       const here = currentFileName();
       const loginPage = "index.html";
       const isLoginPage = (here === "" || here === loginPage);
 
       if (!isLoginPage) {
-        // Estamos numa página que não é o login → manda para o login.
         if (safeRedirect(loginPage)) return;
-        // Se safeRedirect não disparou (loop evitado), segue com convidado.
       }
 
-      // Fallback: convidado temporário em memória (não persiste em localStorage).
       user = {
         id: "guest_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
         username: "Convidado",
@@ -1374,14 +1492,12 @@
       if (!currentUser.stats) updateCurrentUser({ stats: {} });
     }
 
-    // A partir daqui SEMPRE temos currentUser.
     renderBalance();
     renderBetUI();
     renderTurboUI();
     renderAutoSelectorUI();
     renderPaytable();
 
-    // Símbolos iniciais via ID (compatível com v3)
     const initialGrid = [
       [resolveSymbol("crown"), resolveSymbol("bell"),  resolveSymbol("cherry")],
       [resolveSymbol("crown"), resolveSymbol("lemon"), resolveSymbol("orange")],
@@ -1470,7 +1586,10 @@
 
     document.querySelectorAll(".modal-backdrop").forEach(bd => {
       bd.addEventListener("click", (e) => {
-        if (e.target === bd) bd.classList.remove("show");
+        if (e.target === bd) {
+          bd.classList.remove("show");
+          bd.setAttribute("hidden", "");
+        }
       });
     });
 
@@ -1484,12 +1603,12 @@
     document.addEventListener("click", markGesture, { once: true });
 
     const rtp = getTheoreticalRTPPercent();
-    console.log("%c🎰 Tigrinho · Módulos carregados (v3)", "color:#ffd700;font-size:16px;font-weight:900;");
+    console.log("%c🎰 Tigrinho · Módulos carregados (v3.4 mobile)", "color:#ffd700;font-size:16px;font-weight:900;");
     console.log("Motor:", "regrasdeganhos.js v3.2");
-    console.log("UI:", "script.js");
+    console.log("UI:", "script.js v3.4");
+    console.log("Mobile:", IS_MOBILE ? "sim" : "não", "| Reduced motion:", PREFERS_REDUCED_MOTION ? "sim" : "não");
     console.log("Usuário:", currentUser.username, currentUser.guest ? "(convidado)" : "", "| L$:", currentUser.coins);
     console.log("RTP teórico:", rtp.toFixed(2) + "%");
-    console.log("Categorias:", CATEGORY_ORDER.map(k => `${k} ${(OUTCOME_CATEGORIES[k].chance*100).toFixed(0)}%`).join(" · "));
   }
 
   if (document.readyState === "loading") {

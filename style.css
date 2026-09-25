@@ -1,3 +1,13 @@
+/* ============================================================
+   style.css
+   ------------------------------------------------------------
+   Otimizações mobile aplicadas:
+   - [hidden] funciona em tudo (compatível com index.html novo)
+   - contain / content-visibility para reduzir layout e paint
+   - will-change só onde realmente anima (controlado por JS)
+   - partículas com box-shadow reduzido
+   - prefers-reduced-motion respeitado
+   ============================================================ */
 
 :root {
   --gold: #ffd700;
@@ -13,12 +23,17 @@
   --radius-sm: 10px;
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
-  --symbol-h: 82px;
+  --symbol-h: 78px;             /* era 82px — menos pixels p/ rasterizar */
   --reel-h: calc(var(--symbol-h) * 3);
   --font-title: 'Cinzel', serif;
   --font-body: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
 }
+
 * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; -webkit-font-smoothing: antialiased; }
+
+/* Regra-chave: garante que [hidden] sempre vence, mesmo contra display:flex/grid */
+[hidden] { display: none !important; }
+
 html, body { height: 100%; overflow-x: hidden; }
 
 body {
@@ -47,6 +62,7 @@ header {
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border-bottom: 1px solid rgba(255, 215, 0, 0.2);
+  contain: layout paint;
 }
 .icon-btn {
   width: 40px; height: 40px; border-radius: 10px;
@@ -74,7 +90,12 @@ header {
   text-transform: uppercase; margin-top: 2px;
 }
 
-main { padding: 14px; max-width: 520px; margin: 0 auto; }
+main {
+  padding: 14px;
+  max-width: 520px;
+  margin: 0 auto;
+  contain: layout paint style;
+}
 
 .balance-card {
   background: linear-gradient(135deg, rgba(255, 215, 0, 0.18) 0%, rgba(212, 38, 26, 0.12) 100%);
@@ -211,6 +232,7 @@ main { padding: 14px; max-width: 520px; margin: 0 auto; }
   box-shadow: inset 0 4px 14px rgba(0,0,0,0.9), inset 0 -4px 14px rgba(0,0,0,0.7);
   margin-bottom: 14px;
   z-index: 3;
+  contain: layout paint;
 }
 .reels-grid {
   display: grid;
@@ -229,6 +251,7 @@ main { padding: 14px; max-width: 520px; margin: 0 auto; }
   border-radius: 5px;
   border: 1px solid rgba(184, 134, 11, 0.35);
   box-shadow: inset 0 2px 6px rgba(0,0,0,0.1);
+  contain: layout paint strict;
 }
 .reel::before, .reel::after {
   content: '';
@@ -238,12 +261,19 @@ main { padding: 14px; max-width: 520px; margin: 0 auto; }
 .reel::before { top: 0; background: linear-gradient(180deg, rgba(0,0,0,0.35) 0%, transparent 100%); }
 .reel::after { bottom: 0; background: linear-gradient(0deg, rgba(0,0,0,0.35) 0%, transparent 100%); }
 
-.reel-strip { position: absolute; left: 0; right: 0; top: 0; will-change: transform; }
+.reel-strip {
+  position: absolute; left: 0; right: 0; top: 0;
+  /* will-change é aplicado por JS apenas durante o giro */
+  contain: layout paint;
+  transform: translate3d(0, 0, 0);
+  backface-visibility: hidden;
+}
 
 .symbol {
   height: var(--symbol-h);
   display: flex; align-items: center; justify-content: center;
   position: relative;
+  contain: layout paint style;
 }
 .symbol svg {
   width: calc(var(--symbol-h) * 0.78);
@@ -472,6 +502,8 @@ main { padding: 14px; max-width: 520px; margin: 0 auto; }
   border-radius: var(--radius);
   padding: 14px 16px;
   margin-bottom: 14px;
+  content-visibility: auto;
+  contain-intrinsic-size: 320px;
 }
 .paytable-header {
   display: flex; align-items: center; justify-content: space-between;
@@ -507,6 +539,7 @@ main { padding: 14px; max-width: 520px; margin: 0 auto; }
   background: linear-gradient(180deg, rgba(20,8,12,0.98) 0%, rgba(5,2,5,0.98) 100%);
   border-top: 1px solid rgba(255,215,0,0.2);
   padding: 8px 4px calc(8px + var(--safe-bottom));
+  contain: layout paint;
 }
 .nav-btn {
   display: flex; flex-direction: column;
@@ -560,7 +593,7 @@ main { padding: 14px; max-width: 520px; margin: 0 auto; }
   color: #fff; font-size: 13px; cursor: pointer;
   display: flex; align-items: center; justify-content: center;
 }
-.modal-body { overflow-y: auto; flex: 1; margin: -4px -8px -4px 0; padding: 4px 8px 4px 0; }
+.modal-body { overflow-y: auto; flex: 1; margin: -4px -8px -4px 0; padding: 4px 8px 4px 0; -webkit-overflow-scrolling: touch; }
 .modal-body::-webkit-scrollbar { width: 4px; }
 .modal-body::-webkit-scrollbar-thumb { background: rgba(255,215,0,0.3); border-radius: 4px; }
 .stat-card {
@@ -748,6 +781,7 @@ main { padding: 14px; max-width: 520px; margin: 0 auto; }
   box-shadow: 0 10px 30px rgba(0,0,0,0.5), 0 0 30px rgba(255,215,0,0.5);
   display: flex; align-items: center; gap: 8px;
   white-space: nowrap; max-width: calc(100vw - 32px);
+  contain: layout paint;
 }
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 .toast.error { background: linear-gradient(135deg, #d4261a 0%, #8b0000 100%); color: #fff; }
@@ -763,6 +797,8 @@ main { padding: 14px; max-width: 520px; margin: 0 auto; }
   font-family: 'Courier New', monospace;
   color: rgba(255, 255, 255, 0.6);
   display: none;
+  content-visibility: auto;
+  contain-intrinsic-size: 200px;
 }
 .debug-panel.show { display: block; }
 .debug-panel .row { display: flex; justify-content: space-between; padding: 2px 0; }
@@ -775,12 +811,15 @@ main { padding: 14px; max-width: 520px; margin: 0 auto; }
   border-radius: 50%;
   pointer-events: none;
   z-index: 950;
-  box-shadow: 0 0 8px var(--gold), 0 0 16px rgba(255,215,0,0.6);
+  /* Uma camada só de box-shadow em vez de duas — mais leve pra rasterizar */
+  box-shadow: 0 0 10px rgba(255, 215, 0, 0.8);
   animation: particleFloat 2.5s ease-out forwards;
+  will-change: transform, opacity;
+  contain: strict;
 }
 @keyframes particleFloat {
-  0% { opacity: 1; transform: translate(0, 0) scale(1); }
-  100% { opacity: 0; transform: translate(var(--dx), var(--dy)) scale(0.3); }
+  0% { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+  100% { opacity: 0; transform: translate3d(var(--dx), var(--dy), 0) scale(0.3); }
 }
 
 .turbo-fab {
@@ -799,6 +838,7 @@ main { padding: 14px; max-width: 520px; margin: 0 auto; }
   box-shadow: 0 8px 24px rgba(0,0,0,0.6);
   transition: transform 0.15s, box-shadow 0.3s, background 0.3s, border-color 0.3s;
   -webkit-tap-highlight-color: transparent;
+  contain: layout paint;
 }
 .turbo-fab:active { transform: scale(0.9); }
 .turbo-fab .turbo-fab-ring {
@@ -893,6 +933,7 @@ main { padding: 14px; max-width: 520px; margin: 0 auto; }
     0 0 0 4px rgba(184,134,11,0.4);
   position: relative;
   overflow: hidden;
+  contain: layout paint;
 }
 .event-wheel-inner {
   position: absolute; inset: 0;
@@ -950,8 +991,11 @@ main { padding: 14px; max-width: 520px; margin: 0 auto; }
   animation: eventFadeIn 0.6s ease-out forwards;
 }
 
+/* ============================================================
+   MEDIA QUERIES
+   ============================================================ */
 @media (max-width: 380px) {
-  :root { --symbol-h: 72px; }
+  :root { --symbol-h: 70px; }
   .machine-title h2 { font-size: 14px; }
   .spin-btn { padding: 14px; font-size: 13px; }
   .balance-card-value { font-size: 22px; }
@@ -959,4 +1003,26 @@ main { padding: 14px; max-width: 520px; margin: 0 auto; }
   .bet-step { width: 28px; height: 28px; font-size: 14px; }
   .auto-opt { font-size: 9px; padding: 6px 1px; }
 }
-@media (max-height: 700px) { :root { --symbol-h: 66px; } }
+@media (max-height: 700px) { :root { --symbol-h: 64px; } }
+
+/* ============================================================
+   ACESSIBILIDADE / BATERIA
+   ============================================================ */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  .gold-particle, .flash-win, .flash-lose, .flash-super { display: none !important; }
+  .reel-strip { transition-duration: 200ms !important; }
+  .lights .light { animation: none !important; }
+  .turbo-fab.active .turbo-fab-ring,
+  .turbo-fab.active i { animation: none !important; }
+}
+
+/* Suporte a aparelhos sem backdrop-filter (mais antigos) */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  header { background: #050205; }
+  .modal-backdrop { background: rgba(0,0,0,0.96); }
+}

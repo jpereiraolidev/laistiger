@@ -4,30 +4,65 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#0a0508">
+<meta name="color-scheme" content="dark">
+<meta name="format-detection" content="telephone=no">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Tigrinho">
 <link rel="icon" href="data:,">
+<link rel="apple-touch-icon" href="data:,">
 <title>Tigrinho Dourado · Jogar</title>
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
-<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+
 <link rel="stylesheet" href="style.css">
+
+<!-- CSS crítico de performance (aplicado antes de qualquer outra coisa) -->
+<style>
+  /* Evita flash branco e garante fundo escuro imediato */
+  html, body { background: #0a0508; color: #f5e6c8; }
+
+  /* Seções fora da tela não são renderizadas até serem necessárias.
+     Isso reduz drasticamente o trabalho de layout/paint no mobile. */
+  .paytable-card,
+  .debug-panel,
+  .auto-history-card,
+  .modal-backdrop,
+  .win-overlay,
+  .event-overlay,
+  .surprise-overlay {
+    content-visibility: auto;
+    contain-intrinsic-size: 320px;
+  }
+
+  /* Layouts que não mudam de tamanho: isolados do resto da página */
+  main { contain: layout paint style; }
+
+  /* Apenas o que realmente anima ganha will-change (evita consumo de GPU sem motivo) */
+  .reel-strip { will-change: transform; }
+
+  /* Se o usuário pediu menos movimento, respeitamos (também melhora bateria) */
+  @media (prefers-reduced-motion: reduce) {
+    .reel-strip { transition-duration: 200ms !important; }
+    .gold-particle, .flash-win, .flash-lose { display: none !important; }
+  }
+</style>
 </head>
 <body>
 
 <header>
-  <button class="icon-btn" onclick="goHome()">
+  <button class="icon-btn" onclick="goHome()" aria-label="Voltar">
     <i class="fa-solid fa-chevron-left"></i>
   </button>
   <div class="header-title">
     <h1>Tigrinho Dourado</h1>
     <p id="stateLabel">RTP 87% · NORMAL · PRONTO</p>
   </div>
-  <button class="icon-btn" onclick="toggleDebug()">
+  <button class="icon-btn" onclick="toggleDebug()" aria-label="Debug">
     <i class="fa-solid fa-bug"></i>
   </button>
 </header>
@@ -68,7 +103,9 @@
         <div class="reel" data-reel="2"><div class="reel-strip" id="strip2"></div></div>
       </div>
       <div class="payline-overlay" id="paylineOverlay">
-        <svg class="payline-svg" viewBox="0 0 100 100" preserveAspectRatio="none" id="paylineSvg"></svg>
+        <svg class="payline-svg" viewBox="0 0 100 100"
+             preserveAspectRatio="none" id="paylineSvg"
+             shape-rendering="optimizeSpeed"></svg>
       </div>
     </div>
 
@@ -78,9 +115,13 @@
       <div class="bet-row">
         <span class="bet-label">Aposta</span>
         <div class="bet-control">
-          <button class="bet-step" id="betMinus"><i class="fa-solid fa-minus"></i></button>
+          <button class="bet-step" id="betMinus" aria-label="Diminuir aposta">
+            <i class="fa-solid fa-minus"></i>
+          </button>
           <div class="bet-display" id="betDisplay">L$ 0,10</div>
-          <button class="bet-step" id="betPlus"><i class="fa-solid fa-plus"></i></button>
+          <button class="bet-step" id="betPlus" aria-label="Aumentar aposta">
+            <i class="fa-solid fa-plus"></i>
+          </button>
         </div>
       </div>
 
@@ -106,7 +147,7 @@
         </button>
       </div>
 
-      <div class="auto-progress" id="autoProgress">
+      <div class="auto-progress" id="autoProgress" hidden>
         <div class="auto-progress-label">
           <span id="autoProgressTitle">AUTO-SPIN: 25</span>
           <span id="autoCounter">0 / 25</span>
@@ -118,7 +159,7 @@
     </div>
   </div>
 
-  <div class="auto-history-card" id="autoHistoryCard">
+  <div class="auto-history-card" id="autoHistoryCard" hidden>
     <div class="auto-history-title">
       <span>Resultados do Auto-Spin</span>
       <span id="autoSummary"></span>
@@ -126,7 +167,7 @@
     <div class="auto-history-list" id="autoHistoryList"></div>
   </div>
 
-  <div class="debug-panel" id="debugPanel">
+  <div class="debug-panel" id="debugPanel" hidden>
     <div class="row"><span>Estado:</span><span id="dbgState">IDLE</span></div>
     <div class="row"><span>Turbo:</span><span id="dbgTurbo">off</span></div>
     <div class="row"><span>Auto-Spin:</span><span id="dbgAuto">inativo</span></div>
@@ -164,7 +205,7 @@
   <button class="nav-btn" onclick="goHistory()"><i class="fa-solid fa-clock-rotate-left"></i><span>Histórico</span></button>
 </nav>
 
-<div class="modal-backdrop" id="infoModal">
+<div class="modal-backdrop" id="infoModal" hidden>
   <div class="modal">
     <div class="modal-header">
       <h2>Detalhes Técnicos</h2>
@@ -174,7 +215,7 @@
   </div>
 </div>
 
-<div class="modal-backdrop" id="paytableModal">
+<div class="modal-backdrop" id="paytableModal" hidden>
   <div class="modal">
     <div class="modal-header">
       <h2>Tabela Completa</h2>
@@ -184,7 +225,7 @@
   </div>
 </div>
 
-<div class="win-overlay" id="winOverlay">
+<div class="win-overlay" id="winOverlay" hidden>
   <div class="fog"></div>
   <div class="fog-layer"></div>
   <div class="win-content" id="winContent">
@@ -205,7 +246,7 @@
   </div>
 </div>
 
-<div class="event-overlay" id="eventOverlay">
+<div class="event-overlay" id="eventOverlay" hidden>
   <div class="event-fog"></div>
   <div class="event-content">
     <div class="event-badge" id="eventBadge">EVENTO ESPECIAL</div>
@@ -225,7 +266,7 @@
   </div>
 </div>
 
-<div class="surprise-overlay" id="surpriseOverlay">
+<div class="surprise-overlay" id="surpriseOverlay" hidden>
   <div class="surprise-fog"></div>
   <div class="surprise-rays"></div>
   <div class="surprise-content">
@@ -243,14 +284,13 @@
 <!-- ============================================================
      SCRIPTS — ORDEM OBRIGATÓRIA
      ------------------------------------------------------------
-     1) regrasdeganhos.js — motor matemático puro, define
-        window.RegrasDeGanhos
-     2) script.js — UI + storage + execução, consome
-        window.RegrasDeGanhos
-
-     O `defer` garante que os dois só executam depois do DOM
-     estar pronto E na ordem em que aparecem.
+     1) regrasdeganhos.js — motor matemático puro
+     2) script.js         — UI + storage + execução
+     Ambos com `defer` (executam em ordem, após o DOM pronto).
+     O canvas-confetti também com `defer` para não bloquear o
+     primeiro paint em conexões móveis lentas.
      ============================================================ -->
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js" defer></script>
 <script src="regrasdeganhos.js" defer></script>
 <script src="script.js" defer></script>
 
