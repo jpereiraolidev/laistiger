@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0a0508">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="icon" href="data:,">
+<title>Tigrinho Dourado · Jogar</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header>
+  <button class="icon-btn" onclick="goHome()">
+    <i class="fa-solid fa-chevron-left"></i>
+  </button>
+  <div class="header-title">
+    <h1>Tigrinho Dourado</h1>
+    <p id="stateLabel">RTP 87% · NORMAL · PRONTO</p>
+  </div>
+  <button class="icon-btn" onclick="toggleDebug()">
+    <i class="fa-solid fa-bug"></i>
+  </button>
+</header>
+
+<main>
+
+  <div class="balance-card">
+    <div class="balance-card-left">
+      <div class="balance-card-label">Seu saldo</div>
+      <div class="balance-card-value" id="balanceValue">
+        <span class="cur">L$</span>
+        <span id="balanceNumber">0,00</span>
+      </div>
+    </div>
+    <div class="balance-card-icon">💰</div>
+  </div>
+
+  <div class="machine" id="machine">
+    <div class="lights">
+      <div class="light tl"></div>
+      <div class="light gold tc"></div>
+      <div class="light tr"></div>
+      <div class="light gold ml"></div>
+      <div class="light gold mr"></div>
+      <div class="light bl"></div>
+      <div class="light gold bc"></div>
+      <div class="light br"></div>
+    </div>
+
+    <div class="machine-title">
+      <h2>Fichas Douradas</h2>
+    </div>
+
+    <div class="reels-frame">
+      <div class="reels-grid" id="reelsGrid">
+        <div class="reel" data-reel="0"><div class="reel-strip" id="strip0"></div></div>
+        <div class="reel" data-reel="1"><div class="reel-strip" id="strip1"></div></div>
+        <div class="reel" data-reel="2"><div class="reel-strip" id="strip2"></div></div>
+      </div>
+      <div class="payline-overlay" id="paylineOverlay">
+        <svg class="payline-svg" viewBox="0 0 100 100" preserveAspectRatio="none" id="paylineSvg"></svg>
+      </div>
+    </div>
+
+    <div class="controls">
+      <div class="last-result" id="lastResult">Aposte e gire para começar</div>
+
+      <div class="bet-row">
+        <span class="bet-label">Aposta</span>
+        <div class="bet-control">
+          <button class="bet-step" id="betMinus"><i class="fa-solid fa-minus"></i></button>
+          <div class="bet-display" id="betDisplay">L$ 0,10</div>
+          <button class="bet-step" id="betPlus"><i class="fa-solid fa-plus"></i></button>
+        </div>
+      </div>
+
+      <div class="auto-selector-row" id="autoSelectorRow">
+        <span class="auto-selector-label">Auto-Spin</span>
+        <div class="auto-selector" id="autoSelector">
+          <button class="auto-opt" data-rounds="10">10</button>
+          <button class="auto-opt active" data-rounds="25">25</button>
+          <button class="auto-opt" data-rounds="50">50</button>
+          <button class="auto-opt" data-rounds="100">100</button>
+          <button class="auto-opt" data-rounds="250">250</button>
+          <button class="auto-opt" data-rounds="500">500</button>
+          <button class="auto-opt" data-rounds="1000">1000</button>
+        </div>
+      </div>
+
+      <div class="main-actions">
+        <button class="spin-btn" id="spinBtn">
+          <i class="fa-solid fa-play"></i>&nbsp; Girar
+        </button>
+        <button class="auto-btn" id="autoBtn">
+          <i class="fa-solid fa-repeat"></i>&nbsp; Auto
+        </button>
+      </div>
+
+      <div class="auto-progress" id="autoProgress">
+        <div class="auto-progress-label">
+          <span id="autoProgressTitle">AUTO-SPIN: 25</span>
+          <span id="autoCounter">0 / 25</span>
+        </div>
+        <div class="auto-progress-bar">
+          <div class="auto-progress-fill" id="autoProgressFill" style="width:0%"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="auto-history-card" id="autoHistoryCard">
+    <div class="auto-history-title">
+      <span>Resultados do Auto-Spin</span>
+      <span id="autoSummary"></span>
+    </div>
+    <div class="auto-history-list" id="autoHistoryList"></div>
+  </div>
+
+  <div class="debug-panel" id="debugPanel">
+    <div class="row"><span>Estado:</span><span id="dbgState">IDLE</span></div>
+    <div class="row"><span>Turbo:</span><span id="dbgTurbo">off</span></div>
+    <div class="row"><span>Auto-Spin:</span><span id="dbgAuto">inativo</span></div>
+    <div class="row"><span>Última categoria:</span><span id="dbgCategory">—</span></div>
+    <div class="row"><span>Giros:</span><span id="dbgSpins">0</span></div>
+    <div class="row"><span>Apostado:</span><span id="dbgWagered">L$ 0</span></div>
+    <div class="row"><span>Ganho:</span><span id="dbgWon">L$ 0</span></div>
+    <div class="row"><span>RTP real:</span><span id="dbgRtp">—</span></div>
+    <div class="row"><span>Taxa acerto:</span><span id="dbgHitRate">—</span></div>
+    <div class="row"><span>Maior prêmio:</span><span id="dbgBiggest">L$ 0</span></div>
+    <div class="row"><span>Big+Super:</span><span id="dbgSuper">0</span></div>
+    <div class="row"><span>Eventos:</span><span id="dbgEvents">0</span></div>
+  </div>
+
+  <div class="paytable-card">
+    <div class="paytable-header">
+      <h3>Prêmios (3 iguais)</h3>
+      <span class="rtp-badge" id="rtpBadge">RTP 87%</span>
+    </div>
+    <div class="paytable-list" id="paytableList"></div>
+  </div>
+
+</main>
+
+<button class="turbo-fab" id="turboFab" aria-label="Modo Raio">
+  <span class="turbo-fab-ring"></span>
+  <i class="fa-solid fa-bolt"></i>
+</button>
+
+<nav class="bottom-nav" style="grid-template-columns: 1fr 1fr 1fr 1fr 1fr;">
+  <button class="nav-btn" onclick="goHome()"><i class="fa-solid fa-house"></i><span>Início</span></button>
+  <button class="nav-btn" onclick="openInfo()"><i class="fa-solid fa-circle-info"></i><span>Detalhes</span></button>
+  <button class="nav-btn" onclick="openPaytableModal()"><i class="fa-solid fa-scroll"></i><span>Prêmios</span></button>
+  <button class="nav-btn" onclick="goToBonus()"><i class="fa-solid fa-gift"></i><span>Bônus</span></button>
+  <button class="nav-btn" onclick="goHistory()"><i class="fa-solid fa-clock-rotate-left"></i><span>Histórico</span></button>
+</nav>
+
+<div class="modal-backdrop" id="infoModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>Detalhes Técnicos</h2>
+      <button class="modal-close" onclick="closeModal('infoModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal-body" id="infoModalBody"></div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="paytableModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>Tabela Completa</h2>
+      <button class="modal-close" onclick="closeModal('paytableModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal-body" id="paytableModalBody"></div>
+  </div>
+</div>
+
+<div class="win-overlay" id="winOverlay">
+  <div class="fog"></div>
+  <div class="fog-layer"></div>
+  <div class="win-content" id="winContent">
+    <div class="win-tier-label" id="winTierLabel"></div>
+    <div class="win-label" id="winLabel">VOCÊ GANHOU!</div>
+    <div class="win-multiplier" id="winMultiplier"></div>
+    <div class="win-value" id="winValue">L$ 0,00</div>
+    <div class="win-stars" id="winStars">★ ✦ ★ ✦ ★ ✦ ★</div>
+    <div class="win-card" id="winCard">
+      <div class="card-tier-row">
+        <i class="fa-solid fa-star" id="cardIcon"></i>
+        <span class="card-tier" id="cardTier">SUPER GANHO</span>
+      </div>
+      <div class="card-mult" id="cardMult">×25</div>
+      <div class="card-value" id="cardValue">L$ 250,00</div>
+      <div class="card-symbols" id="cardSymbols"></div>
+    </div>
+  </div>
+</div>
+
+<div class="event-overlay" id="eventOverlay">
+  <div class="event-fog"></div>
+  <div class="event-content">
+    <div class="event-badge" id="eventBadge">EVENTO ESPECIAL</div>
+    <div class="event-wheel-wrap">
+      <div class="event-wheel-pointer"></div>
+      <div class="event-wheel" id="eventWheel">
+        <div class="event-wheel-inner" id="eventWheelInner"></div>
+      </div>
+      <div class="event-wheel-center" id="eventWheelCenter">
+        <i class="fa-solid fa-crown"></i>
+      </div>
+    </div>
+    <div class="event-prize-label" id="eventPrizeLabel"></div>
+    <div class="event-prize-mult" id="eventPrizeMult"></div>
+    <div class="event-prize-value" id="eventPrizeValue">L$ 0,00</div>
+    <div class="event-stars">★ ✦ ★ ✦ ★ ✦ ★</div>
+  </div>
+</div>
+
+<div class="surprise-overlay" id="surpriseOverlay">
+  <div class="surprise-fog"></div>
+  <div class="surprise-rays"></div>
+  <div class="surprise-content">
+    <div class="surprise-label" id="surpriseLabel">MULTIPLICADOR</div>
+    <div class="surprise-multiplier" id="surpriseMultiplier">×3</div>
+    <div class="surprise-sub" id="surpriseSub">Aplicado ao prêmio</div>
+  </div>
+</div>
+
+<div class="flash-lose" id="flashLose"></div>
+<div class="flash-win" id="flashWin"></div>
+<div class="flash-win" id="flashSuper"></div>
+<div class="toast" id="toast"></div>
+
+<!-- ============================================================
+     SCRIPTS — ORDEM OBRIGATÓRIA
+     ------------------------------------------------------------
+     1) regrasdeganhos.js — motor matemático puro, define
+        window.RegrasDeGanhos
+     2) script.js — UI + storage + execução, consome
+        window.RegrasDeGanhos
+
+     O `defer` garante que os dois só executam depois do DOM
+     estar pronto E na ordem em que aparecem.
+     ============================================================ -->
+<script src="regrasdeganhos.js" defer></script>
+<script src="script.js" defer></script>
+
+</body>
+</html>
