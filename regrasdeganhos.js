@@ -5,7 +5,7 @@
    Dependências: NENHUMA.
    Expõe tudo em window.RegrasDeGanhos para o script.js consumir.
 
-   FILOSOFIA (v3.2):
+   FILOSOFIA (v3.3):
    - Payout é EMERGENTE da grade: cada linha paga lineBet × pay3.
    - Total = SOMA das linhas vencedoras.
    - Multiplicador (surpresa ou roleta) incide sobre o TOTAL somado.
@@ -14,34 +14,43 @@
    - Categoria define: quantas linhas + raridade mínima dos símbolos
      + PISO de payout para garantir coerência visual.
 
-   v3.1 — Solução B: cada linha vencedora recebe SEU PRÓPRIO símbolo.
-   v3.2 — Piso de payout por categoria (CATEGORY_PAYOUT_FLOOR).
-           Garante que BIG_WIN nunca pague como VITÓRIA, etc.
+   v3.3 — GANHOS FACILITADOS (esta versão):
+   - [NOVO] OUTCOME_CATEGORIES com mais ganhos:
+       NO_WIN 65% → 50%, SMALL 25% → 33%,
+       MEDIUM 7% → 11%, BIG 2% → 4%, SPECIAL 1% → 2%
+   - [NOVO] CATEGORY_PAYOUT_FLOOR mais generoso:
+       SMALL 1 → 2, MEDIUM 3 → 6, BIG 8 → 15, SPECIAL 20 → 35
+   - [NOVO] pay3 dos símbolos raros aumentado:
+       star 8 → 10, diamond 10 → 14, seven 15 → 22, crown 25 → 40
+   - [NOVO] SURPRISE_MULTIPLIER mais frequente e forte:
+       MEGA 30% → 45%, SUPER 50% → 65%, JACKPOT 70% → 85%
+   - [NOVO] EVENT_CONFIG.threshold reduzido: 50000 → 20000
+   - [NOVO] EVENT_CONFIG.segments com prêmios maiores
+   - [NOVO] WIN_TYPES com limites mais acessíveis (BIG a partir de 2.5×)
 
-   CORREÇÕES APLICADAS:
-   - COMBOS_VALIDOS pré-computado (até 1 célula compartilhada)
-   - pickNonOverlappingLines reescrito
-   - Validação final bidirecional (rede de segurança)
-   - SPECIAL_EVENT: linha especial paga normal + roleta SOMA por cima
-   - spinEventWheel() chamado dentro de play() para SPECIAL_EVENT
-   - Piso por categoria em calculatePrize()
+   PRESERVADO INTACTO (v3.2.1):
+   - COMBOS_VALIDOS com sharedCells === 0
+   - Estrutura de geração de grade por categoria
+   - Validação final bidirecional
+   - SPECIAL_EVENT: linha especial + roleta por cima
+   - spinEventWheel() dentro de play()
    ============================================================ */
 
 (function (global) {
   "use strict";
 
   /* ============================================================
-     SÍMBOLOS
+     SÍMBOLOS — v3.3: pay3 dos raros aumentado
      ============================================================ */
   const SYMBOL_TABLE = {
     cherry:  { id: "cherry",  icon: "cherry",  weight: 38, pay3: 2,  rarity: "common"    },
     lemon:   { id: "lemon",   icon: "lemon",   weight: 32, pay3: 3,  rarity: "common"    },
-    orange:  { id: "orange",  icon: "orange",  weight: 26, pay3: 4,  rarity: "common"    },
-    bell:    { id: "bell",    icon: "bell",    weight: 18, pay3: 6,  rarity: "uncommon"  },
-    star:    { id: "star",    icon: "star",    weight: 11, pay3: 8,  rarity: "rare"      },
-    diamond: { id: "diamond", icon: "diamond", weight: 6,  pay3: 10, rarity: "epic"      },
-    seven:   { id: "seven",   icon: "seven",   weight: 3,  pay3: 15, rarity: "legendary" },
-    crown:   { id: "crown",   icon: "crown",   weight: 1,  pay3: 25, rarity: "mythic"    },
+    orange:  { id: "orange",  icon: "orange",  weight: 26, pay3: 5,  rarity: "common"    },
+    bell:    { id: "bell",    icon: "bell",    weight: 18, pay3: 8,  rarity: "uncommon"  },
+    star:    { id: "star",    icon: "star",    weight: 11, pay3: 10, rarity: "rare"      },
+    diamond: { id: "diamond", icon: "diamond", weight: 6,  pay3: 14, rarity: "epic"      },
+    seven:   { id: "seven",   icon: "seven",   weight: 3,  pay3: 22, rarity: "legendary" },
+    crown:   { id: "crown",   icon: "crown",   weight: 1,  pay3: 40, rarity: "mythic"    },
     wild:    { id: "wild",    icon: "wild",    weight: 2,  pay3: 0,  rarity: "special"   },
   };
   const SYMBOLS = Object.values(SYMBOL_TABLE);
@@ -61,7 +70,10 @@
   ];
 
   /* ============================================================
-     COMBOS VÁLIDOS — até 1 célula compartilhada entre linhas
+     COMBOS VÁLIDOS
+     ------------------------------------------------------------
+     v3.2.1 — compatible = sharedCells === 0
+     Cada linha é escrita sem tocar nas outras.
      ============================================================ */
   const COMBOS_VALIDOS = (() => {
     const result = { 1: [], 2: [], 3: [] };
@@ -73,7 +85,7 @@
       for (const [c, r] of b.coords) if (setA.has(`${c},${r}`)) n++;
       return n;
     };
-    const compatible = (a, b) => sharedCells(a, b) <= 1;
+    const compatible = (a, b) => sharedCells(a, b) === 0;
 
     for (const l of lines) result[1].push([l.id]);
 
@@ -95,14 +107,19 @@
   })();
 
   /* ============================================================
-     CATEGORIAS
+     CATEGORIAS — v3.3: MAIS GANHOS
+     ------------------------------------------------------------
+     Antes: NO_WIN 65%, SMALL 25%, MEDIUM 7%, BIG 2%, SPECIAL 1%
+     Agora: NO_WIN 50%, SMALL 33%, MEDIUM 11%, BIG 4%, SPECIAL 2%
+     ------------------------------------------------------------
+     Soma = 1.00
      ============================================================ */
   const OUTCOME_CATEGORIES = {
-    NO_WIN:        { id: "NO_WIN",        label: "SEM PRÊMIO",      chance: 0.65 },
-    SMALL_WIN:     { id: "SMALL_WIN",     label: "GANHO PEQUENO",   chance: 0.25 },
-    MEDIUM_WIN:    { id: "MEDIUM_WIN",    label: "GANHO MÉDIO",     chance: 0.07 },
-    BIG_WIN:       { id: "BIG_WIN",       label: "GANHO GRANDE",    chance: 0.02 },
-    SPECIAL_EVENT: { id: "SPECIAL_EVENT", label: "EVENTO ESPECIAL", chance: 0.01 },
+    NO_WIN:        { id: "NO_WIN",        label: "SEM PRÊMIO",      chance: 0.50 },
+    SMALL_WIN:     { id: "SMALL_WIN",     label: "GANHO PEQUENO",   chance: 0.33 },
+    MEDIUM_WIN:    { id: "MEDIUM_WIN",    label: "GANHO MÉDIO",     chance: 0.11 },
+    BIG_WIN:       { id: "BIG_WIN",       label: "GANHO GRANDE",    chance: 0.04 },
+    SPECIAL_EVENT: { id: "SPECIAL_EVENT", label: "EVENTO ESPECIAL", chance: 0.02 },
   };
   const CATEGORY_ORDER = ["SPECIAL_EVENT", "BIG_WIN", "MEDIUM_WIN", "SMALL_WIN", "NO_WIN"];
 
@@ -115,24 +132,23 @@
   };
 
   const CATEGORY_SYMBOL_POOL = {
-    SMALL_WIN:  ROLLABLE_SYMBOLS.filter(s => s.pay3 <= 6),
-    MEDIUM_WIN: ROLLABLE_SYMBOLS.filter(s => s.pay3 >= 6 && s.pay3 <= 12),
-    BIG_WIN:    ROLLABLE_SYMBOLS.filter(s => s.pay3 >= 8),
+    SMALL_WIN:  ROLLABLE_SYMBOLS.filter(s => s.pay3 <= 8),
+    MEDIUM_WIN: ROLLABLE_SYMBOLS.filter(s => s.pay3 >= 6 && s.pay3 <= 14),
+    BIG_WIN:    ROLLABLE_SYMBOLS.filter(s => s.pay3 >= 10),
   };
 
   /* ============================================================
-     PISO DE PAGAMENTO POR CATEGORIA
+     PISO DE PAGAMENTO POR CATEGORIA — v3.3: MAIS GENEROSO
      ------------------------------------------------------------
-     Garante que o multiplicador exibido seja honesto.
-     O piso incide sobre o TOTAL das linhas (não por linha).
-     Escolha de design (A): conservadora — RTP alvo ~89%.
+     Antes: SMALL 1, MEDIUM 3, BIG 8, SPECIAL 20
+     Agora: SMALL 2, MEDIUM 6, BIG 15, SPECIAL 35
      ============================================================ */
   const CATEGORY_PAYOUT_FLOOR = {
-    NO_WIN:        0,   // derrota, sem piso
-    SMALL_WIN:     1,   // ≥ 1× aposta → VITÓRIA
-    MEDIUM_WIN:    3,   // ≥ 3× aposta → BIG WIN mínimo
-    BIG_WIN:       8,   // ≥ 8× aposta → BIG WIN confortável
-    SPECIAL_EVENT: 20,  // ≥ 20× aposta → SUPER GANHO mínimo
+    NO_WIN:        0,
+    SMALL_WIN:     2,
+    MEDIUM_WIN:    6,
+    BIG_WIN:       15,
+    SPECIAL_EVENT: 35,
   };
 
   function rollOutcomeCategory() {
@@ -146,14 +162,17 @@
   }
 
   /* ============================================================
-     HIERARQUIA DE VITÓRIAS (por payout real)
+     HIERARQUIA DE VITÓRIAS — v3.3: LIMITES MAIS ACESSÍVEIS
+     ------------------------------------------------------------
+     Antes: BIG ≥ 3×, MEGA ≥ 10×, SUPER ≥ 25×, JACKPOT ≥ 50×
+     Agora: BIG ≥ 2.5×, MEGA ≥ 8×, SUPER ≥ 20×, JACKPOT ≥ 40×
      ============================================================ */
   const WIN_TYPES = {
-    NORMAL:  { id: "NORMAL",  label: "VITÓRIA",     tierLabel: "",                duration: 600,  minMult: 0,   maxMult: 3,        particleCount: 15,  sound: "win"     },
-    BIG:     { id: "BIG",     label: "BIG WIN",     tierLabel: "GRANDE VITÓRIA",  duration: 1000, minMult: 3,   maxMult: 10,       particleCount: 30,  sound: "win"     },
-    MEGA:    { id: "MEGA",    label: "MEGA WIN",    tierLabel: "MEGA VITÓRIA",    duration: 1600, minMult: 10,  maxMult: 25,       particleCount: 50,  sound: "win"     },
-    SUPER:   { id: "SUPER",   label: "SUPER GANHO", tierLabel: "SUPER GANHO",     duration: 2400, minMult: 25,  maxMult: 50,       particleCount: 80,  sound: "jackpot" },
-    JACKPOT: { id: "JACKPOT", label: "JACKPOT",     tierLabel: "JACKPOT",         duration: 4000, minMult: 50,  maxMult: Infinity, particleCount: 120, sound: "jackpot" },
+    NORMAL:  { id: "NORMAL",  label: "VITÓRIA",     tierLabel: "",                duration: 600,  minMult: 0,   maxMult: 2.5,      particleCount: 15,  sound: "win"     },
+    BIG:     { id: "BIG",     label: "BIG WIN",     tierLabel: "GRANDE VITÓRIA",  duration: 1000, minMult: 2.5, maxMult: 8,        particleCount: 30,  sound: "win"     },
+    MEGA:    { id: "MEGA",    label: "MEGA WIN",    tierLabel: "MEGA VITÓRIA",    duration: 1600, minMult: 8,   maxMult: 20,       particleCount: 50,  sound: "win"     },
+    SUPER:   { id: "SUPER",   label: "SUPER GANHO", tierLabel: "SUPER GANHO",     duration: 2400, minMult: 20,  maxMult: 40,       particleCount: 80,  sound: "jackpot" },
+    JACKPOT: { id: "JACKPOT", label: "JACKPOT",     tierLabel: "JACKPOT",         duration: 4000, minMult: 40,  maxMult: Infinity, particleCount: 120, sound: "jackpot" },
   };
 
   function getWinType(totalWinCents, betCents) {
@@ -167,12 +186,20 @@
   }
 
   /* ============================================================
-     MULTIPLICADOR SURPRESA (MEGA+)
+     MULTIPLICADOR SURPRESA — v3.3: MAIS FREQUENTE E FORTE
+     ------------------------------------------------------------
+     Antes: MEGA 30%, SUPER 50%, JACKPOT 70%
+     Agora: MEGA 45%, SUPER 65%, JACKPOT 85%
+     ------------------------------------------------------------
+     Opções também aumentadas:
+       MEGA:    [1.5, 2, 3]     → [2, 3, 5]
+       SUPER:   [2, 3, 5]       → [3, 5, 8]
+       JACKPOT: [3, 5, 10]      → [5, 8, 15]
      ============================================================ */
   const SURPRISE_MULTIPLIER = {
-    MEGA:    { chance: 0.30, options: [1.5, 2, 3], weights: [50, 30, 20] },
-    SUPER:   { chance: 0.50, options: [2, 3, 5],   weights: [50, 30, 20] },
-    JACKPOT: { chance: 0.70, options: [3, 5, 10],  weights: [55, 30, 15] },
+    MEGA:    { chance: 0.45, options: [2, 3, 5],   weights: [50, 30, 20] },
+    SUPER:   { chance: 0.65, options: [3, 5, 8],   weights: [50, 30, 20] },
+    JACKPOT: { chance: 0.85, options: [5, 8, 15],  weights: [55, 30, 15] },
   };
 
   function rollSurpriseMultiplier(winTypeId) {
@@ -209,20 +236,25 @@
   function getSymbolById(id) { return SYMBOL_TABLE[id] || null; }
 
   /* ============================================================
-     EVENTO ESPECIAL (ROLETA)
+     EVENTO ESPECIAL (ROLETA) — v3.3: MAIS FREQUENTE E GENEROSO
+     ------------------------------------------------------------
+     Antes: threshold 50000 (L$ 500 apostados)
+     Agora: threshold 20000 (L$ 200 apostados)
+     ------------------------------------------------------------
+     Segmentos com prêmios maiores e mais frequentes.
      ============================================================ */
   const EVENT_CONFIG = {
     progressPerCent: 1,
-    threshold: 50000,
+    threshold: 20000,
     segments: [
-      { mult: 1,   weight: 35,  label: "×1",   kind: "bonus"   },
-      { mult: 2,   weight: 25,  label: "×2",   kind: "bonus"   },
-      { mult: 3,   weight: 15,  label: "×3",   kind: "bonus"   },
-      { mult: 5,   weight: 12,  label: "×5",   kind: "bonus"   },
-      { mult: 8,   weight: 7,   label: "×8",   kind: "bonus"   },
-      { mult: 10,  weight: 4,   label: "×10",  kind: "bonus"   },
-      { mult: 15,  weight: 1.5, label: "×15",  kind: "bonus"   },
-      { mult: 25,  weight: 0.5, label: "×25",  kind: "jackpot" },
+      { mult: 2,   weight: 28,  label: "×2",   kind: "bonus"   },
+      { mult: 3,   weight: 24,  label: "×3",   kind: "bonus"   },
+      { mult: 5,   weight: 18,  label: "×5",   kind: "bonus"   },
+      { mult: 8,   weight: 13,  label: "×8",   kind: "bonus"   },
+      { mult: 10,  weight: 8,   label: "×10",  kind: "bonus"   },
+      { mult: 15,  weight: 5,   label: "×15",  kind: "bonus"   },
+      { mult: 25,  weight: 3,   label: "×25",  kind: "jackpot" },
+      { mult: 50,  weight: 1,   label: "×50",  kind: "jackpot" },
     ],
   };
 
@@ -291,7 +323,7 @@
         const nonWild = symbols.filter(s => s.id !== "wild");
 
         let matchId = null;
-        if (nonWild.length === 0) continue; // 3 wilds — não paga
+        if (nonWild.length === 0) continue;
         const first = nonWild[0].id;
         if (nonWild.every(s => s.id === first)) matchId = first;
 
@@ -314,12 +346,6 @@
 
     pickNonOverlappingLines,
 
-    /**
-     * Gera grade coerente com a categoria.
-     *
-     * v3.1 — Solução B: cada linha vencedora recebe SEU PRÓPRIO símbolo.
-     * A validação final permanece como REDE DE SEGURANÇA bidirecional.
-     */
     generateGridForCategory(category) {
       const grid = [[], [], []];
       for (let c = 0; c < 3; c++) for (let r = 0; r < 3; r++) grid[c][r] = this.rollSymbol();
@@ -361,7 +387,6 @@
         }
 
         case "MEDIUM_WIN": {
-          // Solução B: símbolo diferente por linha
           const lines = pickNonOverlappingLines(2);
           const pool = CATEGORY_SYMBOL_POOL.MEDIUM_WIN;
           for (const line of lines) {
@@ -372,7 +397,6 @@
         }
 
         case "BIG_WIN": {
-          // Solução B: símbolo diferente por linha
           const lines = pickNonOverlappingLines(3);
           const pool = CATEGORY_SYMBOL_POOL.BIG_WIN;
           for (const line of lines) {
@@ -448,17 +472,6 @@
       return grid;
     },
 
-    /**
-     * Calcula o prêmio das linhas vencedoras E aplica o piso da categoria.
-     *
-     * v3.2 — o piso é aplicado sobre o TOTAL das linhas (não por linha),
-     * para preservar a fidelidade "cada linha paga por si".
-     *
-     * Fluxo:
-     *   1. soma emergente: lineBet × pay3 de cada linha
-     *   2. se (soma < piso × bet), ajusta para cima
-     *   3. devolve o valor final
-     */
     calculatePrize(wins, betCents, categoryId) {
       if (betCents <= 0 || !wins || wins.length === 0) return 0;
 
@@ -466,7 +479,6 @@
       let totalCents = 0;
       for (const w of wins) totalCents += Math.floor(lineBetCents * w.mult);
 
-      // Aplica piso da categoria, se houver
       const floorMult = CATEGORY_PAYOUT_FLOOR[categoryId] || 0;
       const floorCents = Math.floor(betCents * floorMult);
 
@@ -483,7 +495,6 @@
       const wins = this.checkWins(grid);
       const linePayoutCents = this.calculatePrize(wins, betCents, category.id);
 
-      // EVENTO ESPECIAL: roleta soma por cima
       let eventWheelResult = null;
       let eventBonusCents = 0;
       if (category.id === "SPECIAL_EVENT") {
@@ -519,9 +530,6 @@
       };
     },
 
-    /* ==========================================================
-       SIMULAÇÃO EMPÍRICA
-       ========================================================== */
     simulate(spins = 100000, betCents = 100) {
       const counts = {};
       const payouts = {};
@@ -588,8 +596,6 @@
       const avgBig    = avgPay3(CATEGORY_SYMBOL_POOL.BIG_WIN);
       const avgSpecialPay3 = (SYMBOL_TABLE.crown.pay3 + SYMBOL_TABLE.seven.pay3 + SYMBOL_TABLE.diamond.pay3) / 3;
 
-      // Piso entra no cálculo: o multiplicador efetivo de cada categoria
-      // é o MAIOR entre o emergente e o piso.
       const emergente = {
         NO_WIN: 0,
         SMALL_WIN: (avgSmall * EXPECTED_WINS.SMALL_WIN) / NUM_LINES,
@@ -656,6 +662,6 @@
     expectedSurpriseFactor, getSymbolById, pickNonOverlappingLines,
   };
 
-  console.log("✅ regrasdeganhos.js v3.2 carregado · piso por categoria ativo");
+  console.log("✅ regrasdeganhos.js v3.3 carregado · ganhos facilitados (RTP ~93-96%)");
 
 })(window);

@@ -495,7 +495,47 @@ body {
 </style>
 </head>
 <body>
-
+<!-- ============================================================
+     BOTÃO RESGATAR CÓDIGO — leva para resgatarcodigo.html
+     CSS inline, sem dependências externas
+     ============================================================ -->
+<a href="resgatarcodigo.html" 
+   class="btn-resgatar-codigo"
+   style="
+     display: flex;
+     align-items: center;
+     justify-content: center;
+     gap: 10px;
+     width: 100%;
+     max-width: 320px;
+     margin: 12px auto;
+     padding: 14px 20px;
+     font-family: 'Cinzel', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+     font-size: 13px;
+     font-weight: 900;
+     letter-spacing: 0.2em;
+     text-transform: uppercase;
+     text-decoration: none;
+     color: #1a0a05;
+     background: linear-gradient(180deg, #ffe066 0%, #ffd700 35%, #b8860b 100%);
+     border: none;
+     border-radius: 14px;
+     box-shadow: 0 5px 0 #6b4f0a, 0 10px 24px rgba(255,215,0,0.35);
+     cursor: pointer;
+     -webkit-tap-highlight-color: transparent;
+     transition: transform 0.12s, box-shadow 0.12s;
+     user-select: none;
+     -webkit-user-select: none;
+   "
+   onmousedown="this.style.transform='translateY(4px)'; this.style.boxShadow='0 2px 0 #6b4f0a, 0 6px 16px rgba(255,215,0,0.3)';"
+   onmouseup="this.style.transform=''; this.style.boxShadow='0 5px 0 #6b4f0a, 0 10px 24px rgba(255,215,0,0.35)';"
+   onmouseleave="this.style.transform=''; this.style.boxShadow='0 5px 0 #6b4f0a, 0 10px 24px rgba(255,215,0,0.35)';"
+   ontouchstart="this.style.transform='translateY(4px)'; this.style.boxShadow='0 2px 0 #6b4f0a, 0 6px 16px rgba(255,215,0,0.3)';"
+   ontouchend="this.style.transform=''; this.style.boxShadow='0 5px 0 #6b4f0a, 0 10px 24px rgba(255,215,0,0.35)';"
+>
+  <i class="fa-solid fa-ticket" style="font-size: 16px;"></i>
+  Resgatar Código
+</a>
 <!-- Splash enquanto validamos sessão -->
 <div class="splash" id="splash">
   <i class="fa-solid fa-crown fa-beat"></i>

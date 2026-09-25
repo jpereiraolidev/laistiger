@@ -6,30 +6,30 @@
 
    Depende de: regrasdeganhos.js v3 (deve vir ANTES no HTML)
 
-   v3.7 — Reescrita da camada de animação para Safari iOS.
+   v3.8 — Bônus via iframe overlay (sem recarregar o jogo).
    ------------------------------------------------------------
-   CORREÇÕES DE TIMING (causa raiz do "precisa tocar na tela"):
-   - [CRÍTICO] sleep(ms) usa Promise.race entre setTimeout e rAF.
-     Se o Safari pausar um, o outro resolve. Nada fica pendente.
-   - [CRÍTICO] animatePrizeCounter roda em rAF + setInterval(50ms)
-     como fallback, contando com Date.now() em vez de
-     performance.now(). Nunca congela no meio.
-   - [CRÍTICO] Durações reduzidas no mobile (roleta 4.3s → 1.8s,
-     contador 2.6s → 1.6s, espera final 2.2s → 0.9s). Menos tempo
-     com timer aberto = menos chance do iOS suspender.
-   - [ALTO]    dateNow() substitui performance.now() nos loops
-     de animação (imune a throttling de rAF).
-   - [ALTO]    spinReelToResult: timeout de segurança ampliado
-     (duration + 400ms) para forçar resolve se transitionend
-     não disparar.
-   - [MÉDIO]   Otimizações mobile: passive listeners, redução de
-     partículas por hardware, will-change gerenciado.
+   MUDANÇAS DESTA VERSÃO:
+   - [NOVO] goToBonus() abre o bônus num iframe overlay
+     (#bonusLayer + #bonusFrame) em vez de navegar para outra
+     página. O jogo principal NUNCA recarrega.
+   - [NOVO] Receptor de postMessage("close-bonus") para fechar
+     o iframe quando o bônus termina.
+   - [NOVO] Verificação de cooldown antes de abrir o iframe,
+     evitando abrir uma tela que já vai mostrar "já resgatado".
+   - [NOVO] Atualização automática do saldo ao fechar o bônus
+     (lê do localStorage, pois o bônus credita direto lá).
+   - [NOVO] Fallback: se o iframe não existir no HTML, cai no
+     comportamento antigo (goTo(BONUS_PAGE)).
 
-   PRESERVADO INTACTO:
+   PRESERVADO INTACTO (v3.7):
+   - sleep(ms) com Promise.race entre setTimeout e rAF
+   - animatePrizeCounter com rAF + setInterval fallback
+   - Durações curtas no mobile
+   - dateNow() em vez de performance.now()
+   - spinReelToResult com timeout de segurança
    - Contrato de sessão (LOGIN_PAGE / HOME_PAGE / BONUS_PAGE)
    - Storage (cassino_users_v1, cassino_session_v1, cassino_history_v1)
-   - Correções da v3.6 (double-payout do evento, addEventProgress
-     ignorando SPECIAL_EVENT, goHistory com hash, stateLabel com RTP)
+   - Correções da v3.6 (double-payout, addEventProgress, goHistory)
    - Toda a UI (SVG cache, strips, modais, paytable, debug)
    ============================================================ */
 
@@ -49,6 +49,8 @@
 
   const AUTO_SPIN_OPTIONS = [10, 25, 50, 100, 250, 500, 1000];
   const GAME_STATES = { IDLE: "idle", SPINNING: "spinning", RESULT: "result", WIN: "win", SUPER_WIN: "super-win", EVENT: "event" };
+
+  const BONUS_COOLDOWN_MS = 24 * 60 * 60 * 1000; // 24h
 
   /* ============================================================
      DEPENDÊNCIAS DO MOTOR DE REGRAS
@@ -831,7 +833,6 @@
       }
       if (isSuper) {
         document.body.classList.add("dimmed");
-        // sleep em vez de setTimeout direto
         sleep(2600).then(() => document.body.classList.remove("dimmed"));
       }
 
@@ -1004,7 +1005,6 @@
     const totalRotation = 360 * (5 + Math.random() * 3);
     const targetRotation = totalRotation + (360 - safeIndex * segAngle - segAngle / 2);
 
-    // Duração curta no mobile — 1.8s em vez de 4.3s
     const wheelDuration = IS_MOBILE ? 1800 : 2500;
 
     inner.style.transition = "none";
@@ -1014,7 +1014,6 @@
     inner.style.transform = `rotate(${targetRotation}deg)`;
 
     const tickInterval = setInterval(() => playWheelTick(), 90);
-    // sleep() em vez de setTimeout direto — imune a pausa do Safari
     await sleep(wheelDuration + 100);
     clearInterval(tickInterval);
 
@@ -1035,7 +1034,6 @@
     emitGoldParticles(80, { x: 0.5, y: 0.4 });
     emitSoftGlow(true);
 
-    // Contador do prêmio do evento — mesma estratégia do win overlay
     await new Promise(resolve => {
       const el = prizeValue;
       if (!el) { resolve(); return; }
@@ -1084,7 +1082,6 @@
     if (stars) stars.classList.add("reveal");
     vibrate([80, 40, 80, 40, 150]);
 
-    // NÃO credita de novo — o crédito aconteceu em executeSpin().
     sessionStats.events++;
     persistUserStats({ event: true });
     addHistory({
@@ -1092,7 +1089,6 @@
       mult: seg.mult, label: seg.label, saldo: currentUser.coins, ts: dateNow(),
     });
 
-    // Espera final curta no mobile — 900ms em vez de 2200ms
     await sleep(IS_MOBILE ? 900 : 1400);
 
     setEventState(EVENT_STATES.FINISHED);
@@ -1617,7 +1613,87 @@
     }
     goTo(HOME_PAGE + "#historico");
   }
-  function goToBonus() { vibrate(10); goTo(BONUS_PAGE); }
+
+  /* ============================================================
+     🔥 ABRIR BÔNUS — como iframe overlay (sem recarregar o jogo)
+     ------------------------------------------------------------
+     Comportamento:
+       1. Se o iframe existir no HTML (#bonusLayer + #bonusFrame),
+          abre o bônus lá dentro. O jogo principal continua vivo.
+       2. Se não existir, cai no fallback (goTo(BONUS_PAGE)).
+     Verifica o cooldown ANTES de abrir, para não abrir uma tela
+     que já vai mostrar "já resgatado".
+     ============================================================ */
+  function goToBonus() {
+    vibrate(10);
+
+    const layer = document.getElementById("bonusLayer");
+    const frame = document.getElementById("bonusFrame");
+
+    // Fallback: se o iframe não existir no HTML, usa navegação normal
+    if (!layer || !frame) {
+      goTo(BONUS_PAGE);
+      return;
+    }
+
+    // Se já estiver aberto, não faz nada
+    if (!layer.hasAttribute("hidden")) return;
+
+    // Verifica cooldown
+    const now = dateNow();
+    const last = currentUser && typeof currentUser.lastBonusClaim === "number"
+      ? currentUser.lastBonusClaim
+      : 0;
+    const elapsed = now - last;
+
+    if (elapsed < BONUS_COOLDOWN_MS) {
+      const remaining = BONUS_COOLDOWN_MS - elapsed;
+      const h = Math.floor(remaining / 3600000);
+      const m = Math.floor((remaining % 3600000) / 60000);
+      toast(`Bônus disponível em ${h}h ${m}min`, "error");
+      vibrate([40, 40, 40]);
+      return;
+    }
+
+    // Abre o iframe
+    frame.src = BONUS_PAGE + "?mode=resgate&t=" + dateNow();
+    layer.removeAttribute("hidden");
+
+    // Bloqueia scroll do body enquanto o bônus está aberto
+    document.body.style.overflow = "hidden";
+
+    vibrate(15);
+  }
+
+  /* ============================================================
+     🔥 FECHAR BÔNUS — chamado quando o iframe avisa que terminou
+     ------------------------------------------------------------
+     Esconde o iframe, limpa o src (libera memória), atualiza
+     o saldo (o bônus credita direto no localStorage) e libera
+     o scroll. O jogo principal NUNCA é recarregado.
+     ============================================================ */
+  function closeBonusLayer() {
+    const layer = document.getElementById("bonusLayer");
+    const frame = document.getElementById("bonusFrame");
+
+    if (layer) layer.setAttribute("hidden", "");
+    if (frame) frame.src = "about:blank";
+
+    document.body.style.overflow = "";
+
+    // Atualiza saldo do usuário (o bônus creditou direto no storage)
+    try {
+      const users = getUsers();
+      const idx = users.findIndex(u => u.id === currentUser.id);
+      if (idx >= 0) {
+        currentUser = users[idx];
+        renderBalance(true);
+      }
+    } catch (e) {}
+
+    vibrate(15);
+    toast("Bônus coletado!");
+  }
 
   /* ============================================================
      INIT — REGRA ÚNICA DE SESSÃO
@@ -1751,6 +1827,22 @@
       });
     });
 
+    /* ============================================================
+       🔥 RECEPTOR DE MENSAGENS DO BÔNUS (iframe)
+       ------------------------------------------------------------
+       O bônus envia "close-bonus" quando o usuário termina.
+       Aqui apenas escondemos o iframe — o jogo principal
+       continua vivo, sem recarregar nada.
+       ============================================================ */
+    window.addEventListener("message", (event) => {
+      // Segurança: só aceita mensagens da mesma origem
+      if (event.origin !== window.location.origin) return;
+
+      if (event.data && event.data.type === "close-bonus") {
+        closeBonusLayer();
+      }
+    });
+
     // Listeners de gesto com passive:true (melhora scroll/performance no iOS)
     const markGesture = () => {
       userGestureReceived = true;
@@ -1762,7 +1854,7 @@
     document.addEventListener("click", markGesture, { once: true });
 
     const rtp = getTheoreticalRTPPercent();
-    console.log("%c🎰 laistiger.html · jogo (v3.7 iOS timing)", "color:#ffd700;font-size:16px;font-weight:900;");
+    console.log("%c🎰 laistiger.html · jogo (v3.8 bônus iframe)", "color:#ffd700;font-size:16px;font-weight:900;");
     console.log("Usuário:", currentUser.username, "| L$:", formatCents(currentUser.coins));
     console.log("RTP teórico:", rtp.toFixed(2) + "%");
     console.log("Mobile:", IS_MOBILE ? "sim" : "não", "| Hardware:", _hwConcurrency, "cores");

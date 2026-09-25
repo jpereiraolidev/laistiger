@@ -1,0 +1,1041 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#0a0508">
+  <meta name="color-scheme" content="dark">
+  <meta name="format-detection" content="telephone=no">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="icon" href="data:,">
+  <title>Resgatar Código · Tigrinho</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+
+  <style>
+    /* ============================================================
+       RESGATAR CÓDIGO — laistiger[valor]
+       ============================================================ */
+    :root {
+      --gold: #ffd700;
+      --gold-3: #b8860b;
+      --gold-5: #ffe066;
+      --red: #d4261a;
+      --bg: #0a0508;
+      --text: #ffffff;
+      --text-2: #d0c8b8;
+      --text-3: #8a8070;
+      --safe-top: env(safe-area-inset-top, 0px);
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+      --font-title: 'Cinzel', serif;
+      --font-body: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; -webkit-font-smoothing: antialiased; }
+    [hidden] { display: none !important; }
+
+    html, body { height: 100%; overflow-x: hidden; }
+
+    body {
+      font-family: var(--font-body);
+      color: var(--text);
+      background:
+        radial-gradient(ellipse at top, rgba(212, 38, 26, 0.15) 0%, transparent 55%),
+        radial-gradient(ellipse at bottom, rgba(255, 215, 0, 0.10) 0%, transparent 55%),
+        linear-gradient(180deg, #050205 0%, #0a0508 50%, #14080c 100%);
+      background-attachment: fixed;
+      min-height: 100vh;
+      min-height: 100dvh;
+      padding: calc(12px + var(--safe-top)) 16px calc(16px + var(--safe-bottom));
+      user-select: none;
+      -webkit-user-select: none;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* ============================================================
+       WRAP
+       ============================================================ */
+    .wrap {
+      width: 100%;
+      max-width: 420px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    /* ============================================================
+       HEADER
+       ============================================================ */
+    .hdr {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 6px 4px;
+    }
+    .hdr-back {
+      width: 40px; height: 40px;
+      border-radius: 12px;
+      border: 1.5px solid rgba(255,215,0,0.35);
+      background: rgba(0,0,0,0.4);
+      color: rgba(255,215,0,0.85);
+      font-size: 16px;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: transform 0.12s, border-color 0.2s;
+    }
+    .hdr-back:active { transform: scale(0.9); }
+    .hdr-title {
+      flex: 1;
+      text-align: center;
+    }
+    .hdr-title h1 {
+      font-family: var(--font-title);
+      font-size: 16px;
+      font-weight: 900;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      background: linear-gradient(180deg, #fff5cc 0%, #ffd700 50%, #b8860b 100%);
+      -webkit-background-clip: text; background-clip: text;
+      -webkit-text-fill-color: transparent;
+      filter: drop-shadow(0 2px 6px rgba(255,215,0,0.4));
+      line-height: 1.1;
+    }
+    .hdr-title p {
+      font-size: 9px;
+      letter-spacing: 0.25em;
+      color: rgba(255,215,0,0.55);
+      text-transform: uppercase;
+      font-weight: 800;
+      margin-top: 3px;
+    }
+    .hdr-spacer { width: 40px; height: 40px; }
+
+    /* ============================================================
+       CARD PRINCIPAL
+       ============================================================ */
+    .card {
+      padding: 24px 20px;
+      border-radius: 20px;
+      background:
+        radial-gradient(circle at 50% 0%, rgba(255,215,0,0.08) 0%, transparent 65%),
+        linear-gradient(180deg, #1a0a12 0%, #0a0508 100%);
+      border: 1.5px solid rgba(255,215,0,0.3);
+      box-shadow: 0 20px 60px rgba(0,0,0,0.8), 0 0 40px rgba(255,215,0,0.08);
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    .card-icon {
+      display: flex;
+      justify-content: center;
+      margin-bottom: 4px;
+    }
+    .card-icon i {
+      font-size: 42px;
+      color: var(--gold);
+      filter: drop-shadow(0 0 20px rgba(255,215,0,0.6));
+    }
+
+    .card-title {
+      font-family: var(--font-title);
+      font-size: 14px;
+      font-weight: 900;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      text-align: center;
+      color: var(--gold);
+      margin-bottom: 4px;
+    }
+
+    .card-desc {
+      text-align: center;
+      font-size: 13px;
+      color: var(--text-2);
+      line-height: 1.5;
+      font-weight: 600;
+    }
+    .card-desc strong {
+      color: var(--gold);
+      font-family: var(--font-title);
+      font-weight: 900;
+      letter-spacing: 0.05em;
+    }
+
+    /* ============================================================
+       INPUT DE CÓDIGO
+       ============================================================ */
+    .input-wrap {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .input-label {
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: rgba(255,215,0,0.6);
+      padding-left: 4px;
+    }
+
+    .input-box {
+      position: relative;
+      display: flex;
+      align-items: center;
+      border-radius: 14px;
+      background: rgba(0,0,0,0.5);
+      border: 1.5px solid rgba(255,215,0,0.3);
+      transition: border-color 0.2s, box-shadow 0.2s;
+      overflow: hidden;
+    }
+    .input-box:focus-within {
+      border-color: var(--gold);
+      box-shadow: 0 0 20px rgba(255,215,0,0.25);
+    }
+    .input-box.error {
+      border-color: var(--red);
+      box-shadow: 0 0 20px rgba(212,38,26,0.3);
+      animation: shake 0.4s;
+    }
+    .input-box.success {
+      border-color: #22c55e;
+      box-shadow: 0 0 20px rgba(34,197,94,0.3);
+    }
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      20% { transform: translateX(-8px); }
+      40% { transform: translateX(8px); }
+      60% { transform: translateX(-5px); }
+      80% { transform: translateX(5px); }
+    }
+
+    .input-prefix {
+      padding: 0 0 0 16px;
+      font-family: var(--font-title);
+      font-size: 15px;
+      font-weight: 900;
+      color: var(--gold);
+      letter-spacing: 0.05em;
+      user-select: none;
+      pointer-events: none;
+      white-space: nowrap;
+    }
+
+    .input-field {
+      flex: 1;
+      padding: 16px 16px 16px 0;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: var(--text);
+      font-family: var(--font-title);
+      font-size: 15px;
+      font-weight: 900;
+      letter-spacing: 0.05em;
+      min-width: 0;
+    }
+    .input-field::placeholder {
+      color: rgba(255,255,255,0.2);
+      font-weight: 700;
+      letter-spacing: 0.1em;
+    }
+
+    .input-clear {
+      padding: 0 16px;
+      background: transparent;
+      border: none;
+      color: rgba(255,255,255,0.3);
+      font-size: 14px;
+      cursor: pointer;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+    }
+    .input-clear.visible { display: flex; }
+    .input-clear:active { transform: scale(0.9); color: rgba(255,255,255,0.6); }
+
+    .input-hint {
+      font-size: 11px;
+      color: var(--text-3);
+      font-weight: 600;
+      padding-left: 4px;
+      line-height: 1.4;
+    }
+    .input-hint strong {
+      color: rgba(255,215,0,0.7);
+      font-family: var(--font-title);
+      font-weight: 900;
+    }
+
+    /* ============================================================
+       PREVIEW DO VALOR
+       ============================================================ */
+    .preview {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 12px;
+      border-radius: 12px;
+      background: rgba(255,215,0,0.06);
+      border: 1px dashed rgba(255,215,0,0.3);
+      opacity: 0;
+      transform: scale(0.95);
+      transition: opacity 0.25s, transform 0.25s;
+      min-height: 50px;
+    }
+    .preview.show {
+      opacity: 1;
+      transform: scale(1);
+    }
+    .preview-label {
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: rgba(255,215,0,0.6);
+    }
+    .preview-value {
+      font-family: var(--font-title);
+      font-size: 22px;
+      font-weight: 900;
+      color: var(--gold);
+      font-variant-numeric: tabular-nums;
+      filter: drop-shadow(0 2px 8px rgba(255,215,0,0.5));
+    }
+
+    /* ============================================================
+       BOTÕES
+       ============================================================ */
+    .actions {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .btn {
+      width: 100%;
+      padding: 16px 20px;
+      font-family: var(--font-title);
+      font-size: 13px;
+      font-weight: 900;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      border: none;
+      border-radius: 14px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      transition: transform 0.12s, box-shadow 0.12s, opacity 0.2s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    .btn-primary {
+      background: linear-gradient(180deg, #ffe066 0%, #ffd700 35%, #b8860b 100%);
+      color: #1a0a05;
+      box-shadow: 0 5px 0 #6b4f0a, 0 10px 24px rgba(255,215,0,0.35);
+    }
+    .btn-primary:active:not(:disabled) {
+      transform: translateY(4px);
+      box-shadow: 0 2px 0 #6b4f0a, 0 6px 16px rgba(255,215,0,0.3);
+    }
+
+    .btn-secondary {
+      background: rgba(0,0,0,0.4);
+      color: rgba(255,215,0,0.85);
+      border: 1.5px solid rgba(255,215,0,0.35);
+      box-shadow: none;
+    }
+    .btn-secondary:active:not(:disabled) {
+      transform: translateY(2px);
+    }
+
+    /* ============================================================
+       MENSAGEM DE FEEDBACK
+       ============================================================ */
+    .feedback {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 14px 16px;
+      border-radius: 12px;
+      font-size: 13px;
+      font-weight: 700;
+      line-height: 1.4;
+      opacity: 0;
+      transform: translateY(-8px);
+      transition: opacity 0.3s, transform 0.3s;
+      pointer-events: none;
+    }
+    .feedback.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .feedback.error {
+      background: rgba(212,38,26,0.15);
+      border: 1.5px solid rgba(212,38,26,0.5);
+      color: #fca5a5;
+    }
+    .feedback.success {
+      background: rgba(34,197,94,0.15);
+      border: 1.5px solid rgba(34,197,94,0.5);
+      color: #86efac;
+    }
+    .feedback i { font-size: 18px; flex-shrink: 0; }
+
+    /* ============================================================
+       SALDO ATUAL
+       ============================================================ */
+    .balance {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      border-radius: 12px;
+      background: rgba(0,0,0,0.35);
+      border: 1px solid rgba(255,215,0,0.2);
+    }
+    .balance-label {
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: rgba(255,215,0,0.5);
+    }
+    .balance-value {
+      font-family: var(--font-title);
+      font-size: 18px;
+      font-weight: 900;
+      color: var(--gold);
+      font-variant-numeric: tabular-nums;
+    }
+    .balance-value.pop {
+      animation: balancePop 0.5s cubic-bezier(0.34,1.56,0.64,1);
+    }
+    @keyframes balancePop {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.15); color: #22c55e; }
+      100% { transform: scale(1); }
+    }
+
+    /* ============================================================
+       SPLASH DE SUCESSO (overlay)
+       ============================================================ */
+    .success-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      background: radial-gradient(ellipse at center, rgba(30,15,5,0.85) 0%, rgba(0,0,0,0.98) 100%);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.4s;
+    }
+    .success-overlay.show {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .success-content {
+      text-align: center;
+      max-width: 340px;
+      animation: successEnter 0.6s cubic-bezier(0.34,1.56,0.64,1);
+    }
+    @keyframes successEnter {
+      from { opacity: 0; transform: scale(0.6); }
+      to   { opacity: 1; transform: scale(1); }
+    }
+    .success-icon {
+      font-size: 64px;
+      color: var(--gold);
+      filter: drop-shadow(0 0 30px rgba(255,215,0,0.8));
+      margin-bottom: 16px;
+      animation: successPulse 1.5s ease-in-out infinite;
+    }
+    @keyframes successPulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.1); }
+    }
+    .success-title {
+      font-family: var(--font-title);
+      font-size: 22px;
+      font-weight: 900;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      background: linear-gradient(180deg, #fff5cc 0%, #ffd700 45%, #b8860b 100%);
+      -webkit-background-clip: text; background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 10px;
+    }
+    .success-value {
+      font-family: var(--font-title);
+      font-size: 44px;
+      font-weight: 900;
+      color: var(--gold);
+      font-variant-numeric: tabular-nums;
+      filter: drop-shadow(0 4px 20px rgba(255,215,0,0.7));
+      margin-bottom: 6px;
+    }
+    .success-mult {
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: rgba(255,215,0,0.7);
+      margin-bottom: 24px;
+    }
+    .success-btn {
+      width: 100%;
+      max-width: 260px;
+      margin: 0 auto;
+      padding: 15px 24px;
+      font-family: var(--font-title);
+      font-size: 13px;
+      font-weight: 900;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      border: none;
+      border-radius: 14px;
+      cursor: pointer;
+      background: linear-gradient(180deg, #ffe066 0%, #ffd700 35%, #b8860b 100%);
+      color: #1a0a05;
+      box-shadow: 0 6px 0 #6b4f0a, 0 12px 32px rgba(255,215,0,0.4);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    .success-btn:active {
+      transform: translateY(4px);
+      box-shadow: 0 2px 0 #6b4f0a;
+    }
+
+    /* ============================================================
+       REDUCED MOTION
+       ============================================================ */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ============================================================
+       WRAP PRINCIPAL
+       ============================================================ -->
+  <div class="wrap" id="wrap">
+
+    <!-- HEADER -->
+    <div class="hdr">
+      <button class="hdr-back" id="backBtn" aria-label="Voltar">
+        <i class="fa-solid fa-arrow-left"></i>
+      </button>
+      <div class="hdr-title">
+        <h1>Resgatar Código</h1>
+        <p>Ative seu bônus</p>
+      </div>
+      <div class="hdr-spacer"></div>
+    </div>
+
+    <!-- SALDO -->
+    <div class="balance">
+      <span class="balance-label">Saldo atual</span>
+      <span class="balance-value" id="balanceValue">L$ 0,00</span>
+    </div>
+
+    <!-- CARD PRINCIPAL -->
+    <div class="card">
+
+      <div class="card-icon">
+        <i class="fa-solid fa-ticket"></i>
+      </div>
+
+      <div class="card-title">Digite seu código</div>
+      <div class="card-desc">
+        Use o formato <strong>laistiger[valor]</strong><br>
+        Ex: <strong>laistiger50</strong> → L$ 50,00
+      </div>
+
+      <!-- INPUT -->
+      <div class="input-wrap">
+        <div class="input-label">Código</div>
+        <div class="input-box" id="inputBox">
+          <span class="input-prefix">laistiger</span>
+          <input 
+            type="text" 
+            id="inputField" 
+            class="input-field"
+            placeholder="50"
+            inputmode="numeric"
+            pattern="[0-9]*"
+            autocomplete="off"
+            autocorrect="off"
+            autocapitalize="off"
+            spellcheck="false"
+            maxlength="7"
+          >
+          <button class="input-clear" id="inputClear" aria-label="Limpar">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+        <div class="input-hint">
+          Digite apenas o valor numérico. Mínimo <strong>L$ 1,00</strong>, máximo <strong>L$ 100,00</strong>.
+        </div>
+      </div>
+
+      <!-- PREVIEW -->
+      <div class="preview" id="preview">
+        <span class="preview-label">Você vai receber</span>
+        <span class="preview-value" id="previewValue">L$ 0,00</span>
+      </div>
+
+      <!-- FEEDBACK -->
+      <div class="feedback" id="feedback">
+        <i class="fa-solid fa-circle-exclamation"></i>
+        <span id="feedbackText">Mensagem</span>
+      </div>
+
+      <!-- AÇÕES -->
+      <div class="actions">
+        <button class="btn btn-primary" id="resgatarBtn" disabled>
+          <i class="fa-solid fa-gift"></i>
+          Resgatar
+        </button>
+        <button class="btn btn-secondary" id="voltarBtn">
+          <i class="fa-solid fa-arrow-left"></i>
+          Voltar ao Jogo
+        </button>
+      </div>
+
+    </div>
+
+  </div>
+
+  <!-- ============================================================
+       OVERLAY DE SUCESSO
+       ============================================================ -->
+  <div class="success-overlay" id="successOverlay">
+    <div class="success-content">
+      <div class="success-icon">
+        <i class="fa-solid fa-circle-check"></i>
+      </div>
+      <div class="success-title">Código Resgatado!</div>
+      <div class="success-value" id="successValue">L$ 0,00</div>
+      <div class="success-mult" id="successCode">laistiger</div>
+      <button class="success-btn" id="successBtn">
+        <i class="fa-solid fa-arrow-right"></i>
+        Continuar
+      </button>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      "use strict";
+
+      /* ============================================================
+         CONSTANTES
+         ============================================================ */
+      const STORAGE_USERS   = "cassino_users_v1";
+      const STORAGE_SESSION = "cassino_session_v1";
+      const STORAGE_HISTORY = "cassino_history_v1";
+      const STORAGE_USED    = "cassino_used_codes_v1";
+
+      const HOME_PAGE = "laistiger.html";
+
+      const PREFIX = "laistiger";
+      const MIN_VALUE = 1;    // L$ 1,00
+      const MAX_VALUE = 100;  // L$ 100,00
+
+      /* ============================================================
+         HELPERS
+         ============================================================ */
+      const $ = (id) => document.getElementById(id);
+
+      function formatCents(cents) {
+        return (cents / 100).toLocaleString("pt-BR", {
+          minimumFractionDigits: 2, maximumFractionDigits: 2,
+        });
+      }
+
+      function dateNow() { return Date.now(); }
+
+      function getUsers() {
+        try { return JSON.parse(localStorage.getItem(STORAGE_USERS)) || []; }
+        catch (e) { return []; }
+      }
+      function saveUsers(users) {
+        try { localStorage.setItem(STORAGE_USERS, JSON.stringify(users)); } catch (e) {}
+      }
+      function getSession() {
+        try { return localStorage.getItem(STORAGE_SESSION); } catch (e) { return null; }
+      }
+      function getUsedCodes() {
+        try { return JSON.parse(localStorage.getItem(STORAGE_USED)) || []; }
+        catch (e) { return []; }
+      }
+      function saveUsedCodes(list) {
+        try { localStorage.setItem(STORAGE_USED, JSON.stringify(list.slice(0, 500))); } catch (e) {}
+      }
+
+      function vibrate(ms = 12) {
+        try {
+          if (typeof navigator === "undefined" || typeof navigator.vibrate !== "function") return;
+          navigator.vibrate(ms);
+        } catch (e) {}
+      }
+
+      /* ============================================================
+         ÁUDIO
+         ============================================================ */
+      let audioCtx = null;
+      function getAudio() {
+        if (!audioCtx) {
+          try {
+            const Ctor = window.AudioContext || window.webkitAudioContext;
+            audioCtx = new Ctor({ latencyHint: "interactive" });
+          } catch (e) { return null; }
+        }
+        if (audioCtx.state === "suspended") audioCtx.resume();
+        return audioCtx;
+      }
+      function beep(freq, dur, vol) {
+        const ctx = getAudio(); if (!ctx) return;
+        const o = ctx.createOscillator(), g = ctx.createGain();
+        o.connect(g); g.connect(ctx.destination);
+        o.type = "square";
+        o.frequency.value = freq;
+        const t = ctx.currentTime;
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(vol, t + 0.005);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+        o.start(t); o.stop(t + dur + 0.02);
+      }
+      function playError() {
+        beep(220, 0.15, 0.06);
+        setTimeout(() => beep(180, 0.2, 0.05), 120);
+      }
+      function playSuccess() {
+        [523, 659, 784, 1047, 1319].forEach((f, i) => {
+          setTimeout(() => beep(f, 0.15, 0.08), i * 90);
+        });
+      }
+
+      /* ============================================================
+         ESTADO
+         ============================================================ */
+      const state = {
+        userId: null,
+        user: null,
+        value: 0,          // valor digitado (em reais, não centavos)
+        resgatando: false,
+      };
+
+      /* ============================================================
+         ELEMENTOS
+         ============================================================ */
+      let inputField, inputBox, inputClear, preview, previewValue;
+      let feedback, feedbackText, resgatarBtn, voltarBtn, backBtn;
+      let balanceValue, successOverlay, successValue, successCode, successBtn;
+
+      function cacheDom() {
+        inputField = $("inputField");
+        inputBox = $("inputBox");
+        inputClear = $("inputClear");
+        preview = $("preview");
+        previewValue = $("previewValue");
+        feedback = $("feedback");
+        feedbackText = $("feedbackText");
+        resgatarBtn = $("resgatarBtn");
+        voltarBtn = $("voltarBtn");
+        backBtn = $("backBtn");
+        balanceValue = $("balanceValue");
+        successOverlay = $("successOverlay");
+        successValue = $("successValue");
+        successCode = $("successCode");
+        successBtn = $("successBtn");
+      }
+
+      /* ============================================================
+         RENDER
+         ============================================================ */
+      function renderBalance(animate = false) {
+        if (!state.user) return;
+        const coins = typeof state.user.coins === "number" ? state.user.coins : 0;
+        if (balanceValue) balanceValue.textContent = "L$ " + formatCents(coins);
+
+        if (animate && balanceValue) {
+          balanceValue.classList.remove("pop");
+          void balanceValue.offsetWidth;
+          balanceValue.classList.add("pop");
+        }
+      }
+
+      function showFeedback(type, msg) {
+        if (!feedback || !feedbackText) return;
+        feedback.className = "feedback show " + type;
+        feedbackText.textContent = msg;
+        const icon = feedback.querySelector("i");
+        if (icon) {
+          icon.className = "fa-solid " + (type === "error" ? "fa-circle-exclamation" : "fa-circle-check");
+        }
+      }
+
+      function hideFeedback() {
+        if (feedback) feedback.className = "feedback";
+      }
+
+      function updatePreview() {
+        const raw = inputField ? inputField.value.trim() : "";
+        const num = parseInt(raw, 10);
+
+        if (raw.length > 0 && !isNaN(num) && num >= MIN_VALUE && num <= MAX_VALUE) {
+          state.value = num;
+          if (previewValue) previewValue.textContent = "L$ " + formatCents(num * 100);
+          if (preview) preview.classList.add("show");
+          if (resgatarBtn) resgatarBtn.disabled = false;
+        } else {
+          state.value = 0;
+          if (preview) preview.classList.remove("show");
+          if (resgatarBtn) resgatarBtn.disabled = true;
+        }
+
+        if (inputClear) {
+          inputClear.classList.toggle("visible", raw.length > 0);
+        }
+      }
+
+      /* ============================================================
+         RESGATAR
+         ============================================================ */
+      function buildCode(value) {
+        return PREFIX + String(value);
+      }
+
+      async function resgatar() {
+        if (state.resgatando) return;
+        if (!state.user) {
+          showFeedback("error", "Sessão expirada. Faça login novamente.");
+          return;
+        }
+        if (state.value < MIN_VALUE || state.value > MAX_VALUE) {
+          showFeedback("error", `Valor deve ser entre L$ ${MIN_VALUE} e L$ ${MAX_VALUE}.`);
+          return;
+        }
+
+        const codigo = buildCode(state.value);
+        const usedCodes = getUsedCodes();
+
+        // Verifica se o código já foi usado
+        if (usedCodes.indexOf(codigo) !== -1) {
+          state.resgatando = false;
+          if (inputBox) {
+            inputBox.classList.add("error");
+            setTimeout(() => inputBox.classList.remove("error"), 500);
+          }
+          showFeedback("error", `O código "${codigo}" já foi resgatado.`);
+          playError();
+          vibrate([60, 40, 60]);
+          return;
+        }
+
+        state.resgatando = true;
+        if (resgatarBtn) resgatarBtn.disabled = true;
+
+        // Simula processamento (600ms)
+        await new Promise(r => setTimeout(r, 600));
+
+        const valorCents = state.value * 100;
+
+        // Credita no usuário
+        const users = getUsers();
+        const idx = users.findIndex(u => u.id === state.userId);
+        if (idx < 0) {
+          state.resgatando = false;
+          if (resgatarBtn) resgatarBtn.disabled = false;
+          showFeedback("error", "Usuário não encontrado.");
+          return;
+        }
+
+        users[idx].coins = (users[idx].coins || 0) + valorCents;
+        saveUsers(users);
+        state.user = users[idx];
+
+        // Marca código como usado
+        usedCodes.push(codigo);
+        saveUsedCodes(usedCodes);
+
+        // Registra no histórico
+        try {
+          const hist = JSON.parse(localStorage.getItem(STORAGE_HISTORY)) || [];
+          hist.unshift({
+            type: "code-redeem",
+            game: "Tigrinho",
+            code: codigo,
+            value: valorCents,
+            saldo: state.user.coins,
+            ts: dateNow(),
+          });
+          localStorage.setItem(STORAGE_HISTORY, JSON.stringify(hist.slice(0, 100)));
+        } catch (e) {}
+
+        // UI
+        if (inputBox) inputBox.classList.add("success");
+        showFeedback("success", `Código resgatado! +L$ ${formatCents(valorCents)}`);
+        playSuccess();
+        vibrate([80, 40, 80, 40, 150]);
+        renderBalance(true);
+
+        // Abre overlay de sucesso
+        if (successValue) successValue.textContent = "L$ " + formatCents(valorCents);
+        if (successCode) successCode.textContent = codigo;
+        if (successOverlay) {
+          successOverlay.classList.add("show");
+        }
+
+        state.resgatando = false;
+
+        // Limpa após 2s
+        setTimeout(() => {
+          if (inputField) inputField.value = "";
+          updatePreview();
+          if (inputBox) inputBox.classList.remove("success");
+          hideFeedback();
+        }, 2000);
+      }
+
+      /* ============================================================
+         NAVEGAÇÃO
+         ============================================================ */
+      function goBack() {
+        try { window.location.href = HOME_PAGE; }
+        catch (e) { window.location.replace(HOME_PAGE); }
+      }
+
+      /* ============================================================
+         BOOT
+         ============================================================ */
+      function boot() {
+        cacheDom();
+
+        // Valida sessão
+        let user = null;
+        try {
+          const sid = getSession();
+          if (sid) {
+            const users = getUsers();
+            user = users.find(u => u.id === sid) || null;
+          }
+        } catch (e) { user = null; }
+
+        if (!user) {
+          try { localStorage.removeItem(STORAGE_SESSION); } catch (e) {}
+          goBack();
+          return;
+        }
+
+        state.userId = user.id;
+        state.user = user;
+        renderBalance();
+
+        // Input: aceita apenas números
+        if (inputField) {
+          inputField.addEventListener("input", (e) => {
+            let v = e.target.value.replace(/\D/g, "");
+            v = v.slice(0, 7); // máximo 7 dígitos
+            e.target.value = v;
+            updatePreview();
+            hideFeedback();
+            if (inputBox) inputBox.classList.remove("error", "success");
+          });
+
+          inputField.addEventListener("keydown", (e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              if (!resgatarBtn.disabled) resgatar();
+            }
+          });
+
+          // Foco automático
+          setTimeout(() => { try { inputField.focus(); } catch (e) {} }, 300);
+        }
+
+        // Botão limpar
+        if (inputClear) {
+          inputClear.addEventListener("click", () => {
+            if (inputField) inputField.value = "";
+            updatePreview();
+            hideFeedback();
+            if (inputBox) inputBox.classList.remove("error", "success");
+            if (inputField) inputField.focus();
+          });
+        }
+
+        // Botão resgatar
+        if (resgatarBtn) {
+          resgatarBtn.addEventListener("click", resgatar);
+        }
+
+        // Botão voltar
+        if (voltarBtn) voltarBtn.addEventListener("click", goBack);
+        if (backBtn) backBtn.addEventListener("click", goBack);
+
+        // Botão do overlay
+        if (successBtn) {
+          successBtn.addEventListener("click", () => {
+            if (successOverlay) successOverlay.classList.remove("show");
+            goBack();
+          });
+        }
+
+        // Gesto pra áudio
+        const markGesture = () => {
+          getAudio();
+          document.removeEventListener("touchstart", markGesture);
+          document.removeEventListener("click", markGesture);
+        };
+        document.addEventListener("touchstart", markGesture, { once: true, passive: true });
+        document.addEventListener("click", markGesture, { once: true });
+
+        console.log("%c🎟️ resgatarcodigo.html carregado", "color:#ffd700;font-size:14px;font-weight:900;");
+        console.log("Formato: laistiger[valor] · Min: L$ " + MIN_VALUE + " · Max: L$ " + MAX_VALUE);
+      }
+
+      if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", boot, { once: true });
+      } else {
+        boot();
+      }
+
+      // Expõe globalmente (útil pra debug)
+      window.goBack = goBack;
+    })();
+  </script>
+
+</body> 
+</html>
