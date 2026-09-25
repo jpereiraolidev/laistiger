@@ -6,16 +6,31 @@
 
    Depende de: regrasdeganhos.js v3 (deve vir ANTES no HTML)
 
-   v3.6 — Integração com o novo fluxo (login → home → jogo):
-   - [CRÍTICO] NÃO cria convidado. Se não houver sessão válida,
-     redireciona para index.html (tela de login).
-   - [CRÍTICO] Removido todo o tratamento de "guest" — quem
-     decide se é convidado é o login.
-   - [CRÍTICO] Evento especial não paga em dobro: a roleta
-     inline apenas EXIBE o resultado já computado no play().
-   - [ALTO]    addEventProgress ignora giros SPECIAL_EVENT.
-   - [MÉDIO]   goHistory aplica hash sem reload se já na home.
-   - [BAIXO]   stateLabel reflete RTP calculado no boot.
+   v3.7 — Reescrita da camada de animação para Safari iOS.
+   ------------------------------------------------------------
+   CORREÇÕES DE TIMING (causa raiz do "precisa tocar na tela"):
+   - [CRÍTICO] sleep(ms) usa Promise.race entre setTimeout e rAF.
+     Se o Safari pausar um, o outro resolve. Nada fica pendente.
+   - [CRÍTICO] animatePrizeCounter roda em rAF + setInterval(50ms)
+     como fallback, contando com Date.now() em vez de
+     performance.now(). Nunca congela no meio.
+   - [CRÍTICO] Durações reduzidas no mobile (roleta 4.3s → 1.8s,
+     contador 2.6s → 1.6s, espera final 2.2s → 0.9s). Menos tempo
+     com timer aberto = menos chance do iOS suspender.
+   - [ALTO]    dateNow() substitui performance.now() nos loops
+     de animação (imune a throttling de rAF).
+   - [ALTO]    spinReelToResult: timeout de segurança ampliado
+     (duration + 400ms) para forçar resolve se transitionend
+     não disparar.
+   - [MÉDIO]   Otimizações mobile: passive listeners, redução de
+     partículas por hardware, will-change gerenciado.
+
+   PRESERVADO INTACTO:
+   - Contrato de sessão (LOGIN_PAGE / HOME_PAGE / BONUS_PAGE)
+   - Storage (cassino_users_v1, cassino_session_v1, cassino_history_v1)
+   - Correções da v3.6 (double-payout do evento, addEventProgress
+     ignorando SPECIAL_EVENT, goHistory com hash, stateLabel com RTP)
+   - Toda a UI (SVG cache, strips, modais, paytable, debug)
    ============================================================ */
 
 (function () {
@@ -23,13 +38,10 @@
 
   /* ============================================================
      CONSTANTES DE NAVEGAÇÃO / STORAGE
-     ------------------------------------------------------------
-     LOGIN_PAGE é o ÚNICO portão do app. Se não houver sessão
-     válida, o script redireciona pra lá e aborta.
      ============================================================ */
   const LOGIN_PAGE = "index.html";
   const HOME_PAGE  = "home.html";
-  const BONUS_PAGE = "regatebonus.html";   // ← troca aqui se o nome real for outro
+  const BONUS_PAGE = "regatebonus.html";
 
   const STORAGE_USERS   = "cassino_users_v1";
   const STORAGE_SESSION = "cassino_session_v1";
@@ -78,6 +90,51 @@
     try { return window.matchMedia("(prefers-reduced-motion: reduce)").matches; }
     catch (e) { return false; }
   })();
+
+  /* ============================================================
+     LAYER DE TEMPO — substitui setTimeout/rAF diretos
+     ------------------------------------------------------------
+     Motivo: Safari iOS pausa setTimeout quando não há gesto
+     recente, e pausa rAF quando a aba perde foco. Se dependemos
+     de UM só, a Promise pode ficar pendente e a animação trava.
+     Aqui usamos Promise.race entre os dois — o que não for
+     pausado resolve primeiro.
+
+     dateNow() usa Date.now() (imune a throttling de rAF no iOS),
+     não performance.now().
+     ============================================================ */
+  function dateNow() {
+    return Date.now();
+  }
+
+  function sleep(ms) {
+    return new Promise(resolve => {
+      let done = false;
+      const finish = () => {
+        if (done) return;
+        done = true;
+        resolve();
+      };
+
+      // Mecanismo 1: setTimeout
+      const t = setTimeout(finish, ms);
+
+      // Mecanismo 2: rAF loop como fallback
+      const start = dateNow();
+      const tick = () => {
+        if (done) return;
+        if (dateNow() - start >= ms) {
+          clearTimeout(t);
+          finish();
+          return;
+        }
+        try { requestAnimationFrame(tick); }
+        catch (e) { /* rAF indisponível — setTimeout já cobre */ }
+      };
+      try { requestAnimationFrame(tick); }
+      catch (e) { /* rAF indisponível — setTimeout já cobre */ }
+    });
+  }
 
   /* ============================================================
      ESTADO
@@ -218,7 +275,6 @@
   function getSession() { try { return localStorage.getItem(STORAGE_SESSION); } catch { return null; } }
   function clearSession() { try { localStorage.removeItem(STORAGE_SESSION); } catch {} }
 
-  /* Persiste updates do usuário logado em cassino_users_v1. */
   function updateCurrentUser(updates) {
     if (!currentUser) return;
     Object.assign(currentUser, updates);
@@ -275,7 +331,7 @@
   const TICK_MIN_INTERVAL = IS_MOBILE ? 55 : 35;
 
   function playTick() {
-    const now = performance.now();
+    const now = dateNow();
     if (now - _lastTickTime < TICK_MIN_INTERVAL) return;
     _lastTickTime = now;
     const ctx = getAudio(); if (!ctx) return;
@@ -338,7 +394,7 @@
   }
 
   /* ============================================================
-     SVGs (inalterado da v3.5)
+     SVGs (inalterado)
      ============================================================ */
   const SVG = {
     wild:    `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="wildGrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#ffd700"/><stop offset="50%" stop-color="#ff8c00"/><stop offset="100%" stop-color="#d4261a"/></linearGradient></defs><rect x="15" y="20" width="70" height="60" rx="8" fill="url(#wildGrad)" stroke="#6b4f0a" stroke-width="2"/><text x="50" y="62" font-family="Cinzel, serif" font-size="36" font-weight="900" text-anchor="middle" fill="#fff" stroke="#6b4f0a" stroke-width="1">W</text></svg>`,
@@ -583,7 +639,11 @@
       };
       const onEnd = () => done();
       strip.addEventListener("transitionend", onEnd, { once: true });
-      setTimeout(done, durationMs + 150);
+
+      // Timeout de segurança — ampliado para 400ms de margem.
+      // Garante que a Promise resolve mesmo se transitionend
+      // não disparar (Safari iOS às vezes engole).
+      setTimeout(done, durationMs + 400);
     });
   }
 
@@ -613,9 +673,20 @@
     document.querySelectorAll(".reel").forEach(r => r.classList.remove("win", "super-win"));
   }
 
+  /* ============================================================
+     PARTÍCULAS — reduzidas por hardware
+     ============================================================ */
+  const _hwConcurrency = (() => {
+    try { return navigator.hardwareConcurrency || 4; }
+    catch (e) { return 4; }
+  })();
+  const PARTICLE_LIMIT = IS_MOBILE
+    ? (_hwConcurrency <= 4 ? 12 : 20)
+    : 60;
+
   function emitGoldParticles(count, origin = { x: 0.5, y: 0.5 }) {
     if (PREFERS_REDUCED_MOTION) return;
-    const max = IS_MOBILE ? 25 : count;
+    const max = Math.min(count, PARTICLE_LIMIT);
     const frag = document.createDocumentFragment();
     const created = [];
     for (let i = 0; i < max; i++) {
@@ -643,7 +714,7 @@
     if (IS_MOBILE && !isSuper) return;
     const cores = ["#ffd700", "#f5c542", "#b8860b", "#8a6d1a"];
     confetti({
-      particleCount: isSuper ? (IS_MOBILE ? 30 : 60) : 25,
+      particleCount: isSuper ? (IS_MOBILE ? 20 : 60) : 25,
       spread: isSuper ? 100 : 60,
       origin: { y: 0.5 },
       colors: cores,
@@ -657,38 +728,75 @@
     });
   }
 
+  /* ============================================================
+     CONTADOR DE PRÊMIO — rAF + setInterval fallback
+     ------------------------------------------------------------
+     Motivo: no Safari iOS, requestAnimationFrame pode pausar.
+     Aqui rodamos os DOIS em paralelo, contando com Date.now().
+     O primeiro que terminar resolve. Nunca congela.
+     ============================================================ */
   function animatePrizeCounter(finalCents, betCents, winType) {
     return new Promise(resolve => {
       const el = $("winValue");
       if (!el) { resolve(); return; }
+
       const id = winType ? winType.id : "NORMAL";
+      const isSuper = id === "SUPER" || id === "JACKPOT";
       let durationMs;
-      if (id === "SUPER" || id === "JACKPOT") durationMs = 2600;
-      else if (id === "MEGA") durationMs = 1800;
-      else if (id === "BIG") durationMs = 1200;
-      else durationMs = 700;
+      if (isSuper)                        durationMs = IS_MOBILE ? 1600 : 2200;
+      else if (id === "MEGA")             durationMs = IS_MOBILE ? 1200 : 1600;
+      else if (id === "BIG")              durationMs = IS_MOBILE ? 900  : 1200;
+      else                                durationMs = IS_MOBILE ? 500  : 700;
 
-      const frameMs = IS_MOBILE ? 33 : 16;
-      const start = performance.now();
-      let lastPaint = 0;
+      const start = dateNow();
+      let finished = false;
+      let rafId = null;
+      let intervalId = null;
 
-      const update = (now) => {
-        if (now - lastPaint < frameMs) {
-          if ((now - start) < durationMs) requestAnimationFrame(update);
-          return;
+      const finish = () => {
+        if (finished) return;
+        finished = true;
+        if (rafId !== null) {
+          try { cancelAnimationFrame(rafId); } catch (e) {}
         }
-        lastPaint = now;
-        const progress = Math.min((now - start) / durationMs, 1);
+        if (intervalId !== null) clearInterval(intervalId);
+        el.textContent = "L$ " + formatCents(finalCents);
+        resolve();
+      };
+
+      const paint = (progress) => {
         const eased = 1 - Math.pow(1 - progress, 3);
         const currentCents = Math.floor(finalCents * eased);
         el.textContent = "L$ " + formatCents(currentCents);
-        if (progress < 1) requestAnimationFrame(update);
-        else { el.textContent = "L$ " + formatCents(finalCents); resolve(); }
       };
-      requestAnimationFrame(update);
+
+      // Mecanismo 1: rAF contínuo
+      const rafLoop = () => {
+        if (finished) return;
+        const elapsed = dateNow() - start;
+        const progress = Math.min(elapsed / durationMs, 1);
+        paint(progress);
+        if (progress >= 1) { finish(); return; }
+        try { rafId = requestAnimationFrame(rafLoop); }
+        catch (e) { /* rAF indisponível, setInterval cobre */ }
+      };
+      try { rafId = requestAnimationFrame(rafLoop); }
+      catch (e) { /* rAF indisponível */ }
+
+      // Mecanismo 2: setInterval de 50ms como fallback
+      intervalId = setInterval(() => {
+        if (finished) { clearInterval(intervalId); return; }
+        const elapsed = dateNow() - start;
+        const progress = Math.min(elapsed / durationMs, 1);
+        paint(progress);
+        if (progress >= 1) finish();
+      }, 50);
     });
   }
 
+  /* ============================================================
+     OVERLAY DE VITÓRIA
+     ============================================================ */
   async function showWinOverlay(result) {
     return new Promise(async (resolve) => {
       const overlay = $("winOverlay");
@@ -723,17 +831,18 @@
       }
       if (isSuper) {
         document.body.classList.add("dimmed");
-        setTimeout(() => document.body.classList.remove("dimmed"), 2600);
+        // sleep em vez de setTimeout direto
+        sleep(2600).then(() => document.body.classList.remove("dimmed"));
       }
 
       show(overlay);
       overlay.classList.add("show");
 
-      await new Promise(r => setTimeout(r, 500));
+      await sleep(IS_MOBILE ? 250 : 500);
       if (winType.id !== "NORMAL" && multEl) {
         multEl.textContent = "×" + totalMultLabel;
         multEl.style.display = "block";
-        await new Promise(r => setTimeout(r, 700));
+        await sleep(IS_MOBILE ? 400 : 700);
       }
       await animatePrizeCounter(result.finalWinCents, result.betCents, winType);
       if (card) {
@@ -747,7 +856,7 @@
           cardSymbols.innerHTML = winningSymbols.map(s => `<span>${symbolHTML(s)}</span>`).join("");
         }
         card.classList.add("show");
-        await new Promise(r => setTimeout(r, isSuper ? 2000 : 1200));
+        await sleep(isSuper ? (IS_MOBILE ? 1200 : 2000) : (IS_MOBILE ? 700 : 1200));
       }
       overlay.classList.remove("show");
       hide(overlay);
@@ -826,7 +935,7 @@
   }
 
   /* ============================================================
-     EVENTO ESPECIAL
+     EVENTO ESPECIAL — reescrito com sleep() e durações curtas
      ============================================================ */
   function getEventProgress() {
     if (!currentUser) return 0;
@@ -835,7 +944,6 @@
   }
   function setEventProgress(v) { updateCurrentUser({ eventProgress: v }); }
 
-  /* Progresso do evento não conta em giros SPECIAL_EVENT. */
   function addEventProgress(betCents, categoryId) {
     if (categoryId === "SPECIAL_EVENT") return;
     const inc = betCents * EVENT_CONFIG.progressPerCent;
@@ -847,9 +955,6 @@
     return getEventProgress() >= EVENT_CONFIG.threshold && currentEventState === EVENT_STATES.LOCKED;
   }
 
-  /* triggerSpecialEvent NÃO paga: apenas EXIBE o resultado que
-     GameEngine.play() já computou e creditou.
-     O parâmetro `seg` é o eventWheelResult do giro. */
   async function triggerSpecialEvent(seg) {
     if (currentState !== GAME_STATES.IDLE) return;
     if (!seg) return;
@@ -899,61 +1004,96 @@
     const totalRotation = 360 * (5 + Math.random() * 3);
     const targetRotation = totalRotation + (360 - safeIndex * segAngle - segAngle / 2);
 
+    // Duração curta no mobile — 1.8s em vez de 4.3s
+    const wheelDuration = IS_MOBILE ? 1800 : 2500;
+
     inner.style.transition = "none";
     inner.style.transform = "rotate(0deg)";
     void inner.offsetWidth;
-    inner.style.transition = "transform 4200ms cubic-bezier(0.17, 0.67, 0.28, 1)";
+    inner.style.transition = `transform ${wheelDuration}ms cubic-bezier(0.17, 0.67, 0.28, 1)`;
     inner.style.transform = `rotate(${targetRotation}deg)`;
 
     const tickInterval = setInterval(() => playWheelTick(), 90);
-    await new Promise(r => setTimeout(r, 4300));
+    // sleep() em vez de setTimeout direto — imune a pausa do Safari
+    await sleep(wheelDuration + 100);
     clearInterval(tickInterval);
 
     inner.style.transition = "transform 260ms ease-in-out";
     inner.style.transform = `rotate(${targetRotation + 2}deg)`;
-    await new Promise(r => setTimeout(r, 280));
+    await sleep(280);
     inner.style.transform = `rotate(${targetRotation}deg)`;
-    await new Promise(r => setTimeout(r, 300));
+    await sleep(300);
 
     setEventState(EVENT_STATES.STOPPING);
     setEventState(EVENT_STATES.REVEAL);
 
     if (badge) badge.textContent = "EVENTO";
     if (prizeLabel) { prizeLabel.textContent = "BÔNUS"; prizeLabel.classList.add("reveal"); }
-    await new Promise(r => setTimeout(r, 300));
+    await sleep(300);
     if (prizeMult) { prizeMult.textContent = seg.label; prizeMult.classList.add("reveal"); }
     playWin(false);
     emitGoldParticles(80, { x: 0.5, y: 0.4 });
     emitSoftGlow(true);
 
+    // Contador do prêmio do evento — mesma estratégia do win overlay
     await new Promise(resolve => {
       const el = prizeValue;
       if (!el) { resolve(); return; }
-      const start = performance.now();
-      const duration = 1600;
-      const update = (now) => {
-        const p = Math.min((now - start) / duration, 1);
-        const eased = 1 - Math.pow(1 - p, 3);
-        el.textContent = "L$ " + formatCents(Math.floor(prizeCents * eased));
-        if (p < 1) requestAnimationFrame(update);
-        else { el.textContent = "L$ " + formatCents(prizeCents); resolve(); }
+      const start = dateNow();
+      const duration = IS_MOBILE ? 1000 : 1600;
+      let finished = false;
+      let rafId = null;
+      let intervalId = null;
+
+      const finish = () => {
+        if (finished) return;
+        finished = true;
+        if (rafId !== null) { try { cancelAnimationFrame(rafId); } catch (e) {} }
+        if (intervalId !== null) clearInterval(intervalId);
+        el.textContent = "L$ " + formatCents(prizeCents);
+        resolve();
       };
+
+      const paint = (progress) => {
+        const eased = 1 - Math.pow(1 - progress, 3);
+        el.textContent = "L$ " + formatCents(Math.floor(prizeCents * eased));
+      };
+
+      const rafLoop = () => {
+        if (finished) return;
+        const elapsed = dateNow() - start;
+        const progress = Math.min(elapsed / duration, 1);
+        paint(progress);
+        if (progress >= 1) { finish(); return; }
+        try { rafId = requestAnimationFrame(rafLoop); }
+        catch (e) {}
+      };
+      try { rafId = requestAnimationFrame(rafLoop); } catch (e) {}
+
+      intervalId = setInterval(() => {
+        if (finished) { clearInterval(intervalId); return; }
+        const elapsed = dateNow() - start;
+        const progress = Math.min(elapsed / duration, 1);
+        paint(progress);
+        if (progress >= 1) finish();
+      }, 50);
+
       el.classList.add("reveal");
-      requestAnimationFrame(update);
     });
 
     if (stars) stars.classList.add("reveal");
     vibrate([80, 40, 80, 40, 150]);
 
-    /* NÃO credita de novo — o crédito aconteceu em executeSpin(). */
+    // NÃO credita de novo — o crédito aconteceu em executeSpin().
     sessionStats.events++;
     persistUserStats({ event: true });
     addHistory({
       type: "event", game: "Tigrinho", bet: currentBetCents, win: prizeCents,
-      mult: seg.mult, label: seg.label, saldo: currentUser.coins, ts: Date.now(),
+      mult: seg.mult, label: seg.label, saldo: currentUser.coins, ts: dateNow(),
     });
 
-    await new Promise(r => setTimeout(r, 2200));
+    // Espera final curta no mobile — 900ms em vez de 2200ms
+    await sleep(IS_MOBILE ? 900 : 1400);
 
     setEventState(EVENT_STATES.FINISHED);
     overlay.classList.remove("show");
@@ -1106,7 +1246,7 @@
         linePayout: result.linePayoutCents || 0,
         eventBonus: result.eventBonusCents || 0,
         wheelMult: result.eventWheelResult ? result.eventWheelResult.mult : null,
-        saldo: currentUser.coins, ts: Date.now(), mode: currentMode,
+        saldo: currentUser.coins, ts: dateNow(), mode: currentMode,
       });
 
       persistUserStats({
@@ -1141,7 +1281,7 @@
       addHistory({
         type: "spin", game: "Tigrinho", bet: currentBetCents, win: 0,
         mult: 0, winType: "LOSS", category: result.category,
-        saldo: currentUser.coins, ts: Date.now(), mode: currentMode,
+        saldo: currentUser.coins, ts: dateNow(), mode: currentMode,
       });
 
       persistUserStats({ hit: false, wagered: currentBetCents, won: 0 });
@@ -1245,7 +1385,7 @@
       if (autoSpin.cancelRequested) break;
 
       while (document.hidden && !autoSpin.cancelRequested) {
-        await new Promise(r => setTimeout(r, 200));
+        await sleep(200);
       }
       if (autoSpin.cancelRequested) break;
 
@@ -1272,7 +1412,7 @@
       }
       if (autoSpin.cancelRequested) break;
 
-      await new Promise(r => setTimeout(r, turboActive ? 100 : 300));
+      await sleep(turboActive ? 100 : 300);
     }
 
     const pendingSeg = autoSpin._pendingEventSeg || null;
@@ -1481,12 +1621,6 @@
 
   /* ============================================================
      INIT — REGRA ÚNICA DE SESSÃO
-     ------------------------------------------------------------
-     1. Lê cassino_session_v1.
-     2. Procura user correspondente em cassino_users_v1.
-     3. Se não achar → limpa sessão e volta pro login (index.html).
-     4. Se achar → carrega e inicia o jogo normalmente.
-     NÃO cria convidado. NÃO cria sessão. NÃO cria user.
      ============================================================ */
   function boot() {
     let user = null;
@@ -1499,7 +1633,6 @@
     } catch (e) { user = null; }
 
     if (!user) {
-      // Sem sessão válida → login. Fim. Nada mais roda.
       clearSession();
       goTo(LOGIN_PAGE);
       return;
@@ -1521,7 +1654,6 @@
     renderAutoSelectorUI();
     renderPaytable();
 
-    // stateLabel reflete o RTP calculado no boot
     setState(GAME_STATES.IDLE);
 
     const initialGrid = [
@@ -1619,19 +1751,21 @@
       });
     });
 
+    // Listeners de gesto com passive:true (melhora scroll/performance no iOS)
     const markGesture = () => {
       userGestureReceived = true;
       document.removeEventListener("touchstart", markGesture);
       document.removeEventListener("click", markGesture);
       setTimeout(() => getAudio(), 100);
     };
-    document.addEventListener("touchstart", markGesture, { once: true });
+    document.addEventListener("touchstart", markGesture, { once: true, passive: true });
     document.addEventListener("click", markGesture, { once: true });
 
     const rtp = getTheoreticalRTPPercent();
-    console.log("%c🎰 laistiger.html · jogo (v3.6)", "color:#ffd700;font-size:16px;font-weight:900;");
+    console.log("%c🎰 laistiger.html · jogo (v3.7 iOS timing)", "color:#ffd700;font-size:16px;font-weight:900;");
     console.log("Usuário:", currentUser.username, "| L$:", formatCents(currentUser.coins));
     console.log("RTP teórico:", rtp.toFixed(2) + "%");
+    console.log("Mobile:", IS_MOBILE ? "sim" : "não", "| Hardware:", _hwConcurrency, "cores");
     console.log("Navegação:", "login=" + LOGIN_PAGE, "| home=" + HOME_PAGE, "| bônus=" + BONUS_PAGE);
   }
 
