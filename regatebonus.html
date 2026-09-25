@@ -1,0 +1,1678 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0a0508">
+<meta name="color-scheme" content="dark">
+<meta name="format-detection" content="telephone=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="icon" href="data:,">
+<title>Tigrinho Dourado · Investigação</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+
+<style>
+/* ============================================================
+   REGATEBONUS.HTML — mini-jogo de investigação
+   ------------------------------------------------------------
+   Motor único: modo "resgate" (1x/dia) ou "evento" (?mode=event).
+   DOM+CSS grid + SVG inline. Sem canvas, sem rAF contínuo.
+   ============================================================ */
+
+:root {
+  --gold: #ffd700;
+  --gold-3: #b8860b;
+  --gold-5: #ffe066;
+  --red: #d4261a;
+  --red-dark: #8b0000;
+  --bg: #0a0508;
+  --bg-2: #14080c;
+  --bg-3: #2a0a12;
+  --cream: #fdf6e3;
+  --text: #ffffff;
+  --text-2: #d0c8b8;
+  --text-3: #8a8070;
+  --radius: 14px;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --font-title: 'Cinzel', serif;
+  --font-body: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --cell: 56px;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; -webkit-font-smoothing: antialiased; }
+[hidden] { display: none !important; }
+
+html, body { height: 100%; overflow-x: hidden; }
+
+body {
+  font-family: var(--font-body);
+  color: var(--text);
+  background:
+    radial-gradient(ellipse at top, rgba(212, 38, 26, 0.20) 0%, transparent 55%),
+    radial-gradient(ellipse at bottom, rgba(255, 215, 0, 0.12) 0%, transparent 55%),
+    linear-gradient(180deg, #050205 0%, #0a0508 50%, #14080c 100%);
+  background-attachment: fixed;
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: calc(12px + var(--safe-top)) 12px calc(16px + var(--safe-bottom));
+  user-select: none;
+  -webkit-user-select: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* ============================================================
+   SPLASH
+   ============================================================ */
+.splash {
+  position: fixed; inset: 0;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 16px;
+  background: #0a0508;
+  z-index: 9999;
+}
+.splash i {
+  font-size: 42px; color: var(--gold);
+  filter: drop-shadow(0 0 20px rgba(255,215,0,0.7));
+}
+.splash span {
+  font-family: var(--font-title);
+  font-size: 12px; letter-spacing: 0.3em;
+  color: rgba(255,215,0,0.7);
+  text-transform: uppercase; font-weight: 800;
+}
+
+/* ============================================================
+   WRAP
+   ============================================================ */
+.wrap {
+  width: 100%;
+  max-width: 480px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1;
+}
+
+/* ============================================================
+   HEADER
+   ============================================================ */
+.hdr {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 4px;
+}
+.hdr-back {
+  width: 38px; height: 38px;
+  border-radius: 12px;
+  border: 1.5px solid rgba(255,215,0,0.35);
+  background: rgba(0,0,0,0.4);
+  color: rgba(255,215,0,0.85);
+  font-size: 15px;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: transform 0.12s, border-color 0.2s;
+}
+.hdr-back:active { transform: scale(0.9); }
+.hdr-title {
+  flex: 1;
+  text-align: center;
+}
+.hdr-title h1 {
+  font-family: var(--font-title);
+  font-size: 15px;
+  font-weight: 900;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  background: linear-gradient(180deg, #fff5cc 0%, #ffd700 50%, #b8860b 100%);
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 2px 6px rgba(255,215,0,0.4));
+  line-height: 1.1;
+}
+.hdr-title p {
+  font-size: 9px;
+  letter-spacing: 0.25em;
+  color: rgba(255,215,0,0.55);
+  text-transform: uppercase;
+  font-weight: 800;
+  margin-top: 3px;
+}
+.hdr-spacer { width: 38px; height: 38px; }
+
+/* ============================================================
+   HUD
+   ============================================================ */
+.hud {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  padding: 8px;
+  border-radius: 14px;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(255,215,0,0.06) 0%, transparent 60%),
+    linear-gradient(180deg, #1a0a12 0%, #0a0508 100%);
+  border: 1px solid rgba(255,215,0,0.25);
+}
+.hud-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 6px 2px;
+  border-radius: 10px;
+  background: rgba(0,0,0,0.35);
+  transition: background 0.3s;
+}
+.hud-item.pop {
+  animation: hudPop 0.35s cubic-bezier(0.34,1.56,0.64,1);
+}
+@keyframes hudPop {
+  0%   { background: rgba(255,215,0,0.4); transform: scale(1); }
+  50%  { transform: scale(1.08); }
+  100% { background: rgba(0,0,0,0.35); transform: scale(1); }
+}
+.hud-icon { width: 20px; height: 20px; }
+.hud-value {
+  font-family: var(--font-title);
+  font-size: 13px;
+  font-weight: 900;
+  color: var(--gold);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.hud-label {
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: rgba(255,215,0,0.5);
+}
+
+/* ============================================================
+   PALCO (grid do mapa)
+   ============================================================ */
+.stage {
+  position: relative;
+  flex: 1;
+  min-height: 380px;
+  border-radius: 18px;
+  background:
+    radial-gradient(ellipse at 50% 0%, rgba(255,215,0,0.05) 0%, transparent 60%),
+    linear-gradient(180deg, #14080c 0%, #0a0508 100%);
+  border: 1.5px solid rgba(255,215,0,0.2);
+  overflow: hidden;
+  padding: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.grid {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(5, var(--cell));
+  grid-template-rows: repeat(7, var(--cell));
+  gap: 4px;
+}
+
+/* Casa */
+.cell {
+  position: relative;
+  border-radius: 10px;
+  background: rgba(255,215,0,0.03);
+  border: 1px solid rgba(255,215,0,0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.3s, border-color 0.3s, transform 0.3s;
+}
+.cell.empty { background: rgba(255,215,0,0.02); border-color: transparent; }
+.cell.start {
+  background: radial-gradient(circle, rgba(255,215,0,0.15) 0%, transparent 70%);
+  border-color: rgba(255,215,0,0.4);
+}
+.cell.coin { background: rgba(255,215,0,0.06); border-color: rgba(255,215,0,0.2); }
+.cell.gossip { background: rgba(56,189,248,0.06); border-color: rgba(56,189,248,0.2); }
+.cell.clue { background: rgba(168,85,247,0.06); border-color: rgba(168,85,247,0.2); }
+.cell.decision {
+  background: radial-gradient(circle, rgba(255,215,0,0.25) 0%, rgba(212,38,26,0.15) 100%);
+  border-color: rgba(255,215,0,0.65);
+  animation: decisionPulse 1.6s ease-in-out infinite;
+}
+@keyframes decisionPulse {
+  0%,100% { box-shadow: 0 0 0 rgba(255,215,0,0.0); }
+  50%     { box-shadow: 0 0 18px rgba(255,215,0,0.6); }
+}
+.cell.suspect { background: rgba(212,38,26,0.08); border-color: rgba(212,38,26,0.3); }
+.cell.secret {
+  background: radial-gradient(circle, rgba(255,215,0,0.35) 0%, rgba(212,38,26,0.15) 100%);
+  border-color: rgba(255,215,0,0.8);
+  box-shadow: 0 0 24px rgba(255,215,0,0.4);
+}
+
+/* Casa já visitada */
+.cell.visited { opacity: 0.55; }
+.cell.collected .cell-svg { opacity: 0.15; transform: scale(0.7); }
+
+.cell-svg {
+  width: 36px; height: 36px;
+  transition: opacity 0.4s, transform 0.4s;
+  pointer-events: none;
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.6));
+}
+
+/* Personagem */
+.character {
+  position: absolute;
+  width: var(--cell);
+  height: var(--cell);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.45s cubic-bezier(0.34, 1.2, 0.64, 1);
+  z-index: 10;
+  pointer-events: none;
+  will-change: transform;
+}
+.character.walking {
+  animation: charWalk 0.5s ease-in-out infinite alternate;
+}
+@keyframes charWalk {
+  from { transform-origin: center bottom; }
+  to   { transform-origin: center bottom; }
+}
+.character svg {
+  width: 44px; height: 44px;
+  filter: drop-shadow(0 4px 8px rgba(0,0,0,0.7));
+}
+
+/* ============================================================
+   PROMPT (fofoca/pista/suspeito) — card sobre o grid
+   ============================================================ */
+.prompt {
+  position: absolute;
+  left: 12px; right: 12px;
+  bottom: 12px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(255,215,0,0.08) 0%, transparent 70%),
+    linear-gradient(180deg, #1a0a12 0%, #0a0508 100%);
+  border: 1.5px solid rgba(255,215,0,0.45);
+  box-shadow: 0 12px 40px rgba(0,0,0,0.85), 0 0 30px rgba(255,215,0,0.15);
+  z-index: 20;
+  animation: promptIn 0.4s cubic-bezier(0.34,1.56,0.64,1);
+}
+@keyframes promptIn {
+  from { opacity: 0; transform: translateY(20px) scale(0.95); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.prompt-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 100px;
+  font-family: var(--font-title);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+.prompt-tag.gossip { background: rgba(56,189,248,0.18); border: 1px solid rgba(56,189,248,0.5); color: #7dd3fc; }
+.prompt-tag.clue   { background: rgba(168,85,247,0.18); border: 1px solid rgba(168,85,247,0.5); color: #d8b4fe; }
+.prompt-tag.suspect{ background: rgba(212,38,26,0.18); border: 1px solid rgba(212,38,26,0.5); color: #fca5a5; }
+.prompt-text {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text);
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+.prompt-text em {
+  color: var(--gold);
+  font-style: normal;
+  font-weight: 800;
+}
+.prompt-btn {
+  width: 100%;
+  padding: 12px;
+  font-family: var(--font-title);
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  background: linear-gradient(180deg, #ffe066 0%, #ffd700 35%, #b8860b 100%);
+  color: #1a0a05;
+  box-shadow: 0 4px 0 #6b4f0a, 0 8px 20px rgba(255,215,0,0.3);
+  transition: transform 0.12s;
+}
+.prompt-btn:active { transform: translateY(3px); box-shadow: 0 1px 0 #6b4f0a; }
+
+/* ============================================================
+   DECISÃO — 3 botões grandes
+   ============================================================ */
+.decision {
+  position: absolute;
+  inset: 12px;
+  padding: 16px;
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(255,215,0,0.1) 0%, transparent 60%),
+    linear-gradient(180deg, rgba(20,8,12,0.97) 0%, rgba(10,5,8,0.99) 100%);
+  border: 1.5px solid rgba(255,215,0,0.5);
+  box-shadow: 0 20px 60px rgba(0,0,0,0.9);
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  animation: promptIn 0.45s cubic-bezier(0.34,1.56,0.64,1);
+}
+.decision-hint {
+  text-align: center;
+  font-family: var(--font-title);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  color: rgba(255,215,0,0.75);
+  margin-bottom: 4px;
+}
+.decision-q {
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-2);
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+.decision-opt {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1.5px solid rgba(255,215,0,0.3);
+  background: linear-gradient(180deg, #1a0a12 0%, #0a0508 100%);
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+  transition: transform 0.12s, border-color 0.3s, box-shadow 0.3s;
+  font-family: inherit;
+  flex: 1;
+}
+.decision-opt:active { transform: scale(0.97); }
+.decision-opt:hover { border-color: var(--gold); box-shadow: 0 0 20px rgba(255,215,0,0.25); }
+.decision-opt-icon {
+  width: 40px; height: 40px;
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(255,215,0,0.1);
+  border: 1px solid rgba(255,215,0,0.3);
+  flex-shrink: 0;
+}
+.decision-opt-icon svg { width: 28px; height: 28px; }
+.decision-opt-text { flex: 1; min-width: 0; }
+.decision-opt-title {
+  font-family: var(--font-title);
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  color: var(--gold);
+  margin-bottom: 2px;
+}
+.decision-opt-desc {
+  font-size: 11px;
+  color: var(--text-2);
+  font-weight: 600;
+  line-height: 1.3;
+}
+.decision-opt-cta {
+  font-family: var(--font-title);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: rgba(255,215,0,0.7);
+  margin-top: 4px;
+}
+
+/* ============================================================
+   OVERLAY FINAL
+   ============================================================ */
+.final-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: radial-gradient(ellipse at center, rgba(30,15,5,0.7) 0%, rgba(0,0,0,0.97) 100%);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.5s ease-out;
+}
+.final-overlay.show { opacity: 1; pointer-events: auto; }
+.final-content {
+  max-width: 400px;
+  width: 100%;
+  text-align: center;
+  animation: finalEnter 0.7s cubic-bezier(0.34,1.56,0.64,1);
+}
+@keyframes finalEnter {
+  from { opacity: 0; transform: scale(0.6); }
+  to   { opacity: 1; transform: scale(1); }
+}
+.final-badge {
+  display: inline-block;
+  padding: 6px 16px;
+  border-radius: 100px;
+  font-family: var(--font-title);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: var(--gold);
+  background: linear-gradient(135deg, rgba(255,215,0,0.18), rgba(212,38,26,0.18));
+  border: 1px solid rgba(255,215,0,0.6);
+  margin-bottom: 16px;
+}
+.final-secret {
+  font-family: var(--font-title);
+  font-size: clamp(22px, 7vw, 32px);
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  background: linear-gradient(180deg, #fff5cc 0%, #ffd700 45%, #b8860b 100%);
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 4px 16px rgba(255,215,0,0.6));
+  margin-bottom: 8px;
+  line-height: 1.1;
+}
+.final-quote {
+  font-size: 14px;
+  color: var(--text-2);
+  font-weight: 600;
+  font-style: italic;
+  line-height: 1.5;
+  margin-bottom: 22px;
+  max-width: 320px;
+  margin-left: auto;
+  margin-right: auto;
+}
+.final-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  margin-bottom: 18px;
+}
+.final-stat {
+  padding: 8px 4px;
+  border-radius: 10px;
+  background: rgba(0,0,0,0.4);
+  border: 1px solid rgba(255,215,0,0.25);
+}
+.final-stat-label {
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: rgba(255,215,0,0.5);
+  margin-bottom: 3px;
+}
+.final-stat-value {
+  font-family: var(--font-title);
+  font-size: 15px;
+  font-weight: 900;
+  color: var(--gold);
+  font-variant-numeric: tabular-nums;
+}
+.final-value {
+  font-family: var(--font-title);
+  font-size: clamp(30px, 10vw, 46px);
+  font-weight: 900;
+  color: var(--gold);
+  font-variant-numeric: tabular-nums;
+  filter: drop-shadow(0 4px 20px rgba(255,215,0,0.7));
+  margin-bottom: 6px;
+}
+.final-mult {
+  font-family: var(--font-title);
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  color: rgba(255,215,0,0.75);
+  margin-bottom: 24px;
+}
+.final-btn {
+  width: 100%;
+  max-width: 280px;
+  margin: 0 auto;
+  padding: 15px 24px;
+  font-family: var(--font-title);
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  border: none;
+  border-radius: 14px;
+  cursor: pointer;
+  background: linear-gradient(180deg, #ffe066 0%, #ffd700 35%, #b8860b 100%);
+  color: #1a0a05;
+  box-shadow: 0 6px 0 #6b4f0a, 0 12px 32px rgba(255,215,0,0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: transform 0.12s;
+}
+.final-btn:active { transform: translateY(4px); box-shadow: 0 2px 0 #6b4f0a; }
+
+/* ============================================================
+   COOLDOWN (já resgatado hoje)
+   ============================================================ */
+.cooldown {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  text-align: center;
+  padding: 24px;
+}
+.cooldown i {
+  font-size: 48px;
+  color: rgba(255,215,0,0.6);
+  filter: drop-shadow(0 0 20px rgba(255,215,0,0.4));
+}
+.cooldown h2 {
+  font-family: var(--font-title);
+  font-size: 18px;
+  font-weight: 900;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+.cooldown p {
+  font-size: 13px;
+  color: var(--text-2);
+  font-weight: 600;
+  line-height: 1.5;
+  max-width: 280px;
+}
+
+/* ============================================================
+   REDUCED MOTION
+   ============================================================ */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  .character { transition: none !important; }
+  .cell.decision { animation: none !important; }
+}
+</style>
+</head>
+<body>
+
+<!-- ============================================================
+     SPLASH
+     ============================================================ -->
+<div class="splash" id="splash">
+  <i class="fa-solid fa-magnifying-glass fa-beat"></i>
+  <span>Abrindo investigação…</span>
+</div>
+
+<!-- ============================================================
+     TELA DE COOLDOWN (quando já resgatou hoje)
+     ============================================================ -->
+<div class="cooldown" id="cooldownScreen" hidden>
+  <i class="fa-solid fa-clock"></i>
+  <h2>Bônus já resgatado</h2>
+  <p id="cooldownText">Você já investigou hoje. Volte amanhã para uma nova pista.</p>
+  <button class="prompt-btn" style="max-width: 240px;" onclick="goBack()">
+    <i class="fa-solid fa-arrow-left"></i> Voltar ao jogo
+  </button>
+</div>
+
+<!-- ============================================================
+     PALCO PRINCIPAL
+     ============================================================ -->
+<div class="wrap" id="wrap" hidden>
+
+  <div class="hdr">
+    <button class="hdr-back" id="backBtn" aria-label="Sair">
+      <i class="fa-solid fa-arrow-left"></i>
+    </button>
+    <div class="hdr-title">
+      <h1>Fofoca na Pista</h1>
+      <p id="modeLabel">Investigação</p>
+    </div>
+    <div class="hdr-spacer"></div>
+  </div>
+
+  <div class="hud">
+    <div class="hud-item" id="hudCoins">
+      <svg class="hud-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="12" cy="12" r="10" fill="url(#coinGrad)" stroke="#6b4f0a" stroke-width="1.5"/>
+        <circle cx="12" cy="12" r="6" fill="none" stroke="#6b4f0a" stroke-width="1" opacity="0.5"/>
+        <text x="12" y="16" text-anchor="middle" font-family="Cinzel" font-size="10" font-weight="900" fill="#6b4f0a">$</text>
+        <defs>
+          <linearGradient id="coinGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#fff5cc"/>
+            <stop offset="50%" stop-color="#ffd700"/>
+            <stop offset="100%" stop-color="#b8860b"/>
+          </linearGradient>
+        </defs>
+      </svg>
+      <div class="hud-value" id="hudCoinValue">0</div>
+      <div class="hud-label">Moedas</div>
+    </div>
+
+    <div class="hud-item" id="hudClues">
+      <svg class="hud-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="10" cy="10" r="6" fill="none" stroke="#d8b4fe" stroke-width="2"/>
+        <line x1="14.5" y1="14.5" x2="20" y2="20" stroke="#d8b4fe" stroke-width="2.5" stroke-linecap="round"/>
+      </svg>
+      <div class="hud-value" id="hudClueValue">0/4</div>
+      <div class="hud-label">Pistas</div>
+    </div>
+
+    <div class="hud-item" id="hudGossips">
+      <svg class="hud-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M4 5 Q4 3 6 3 L18 3 Q20 3 20 5 L20 14 Q20 16 18 16 L11 16 L7 20 L7 16 L6 16 Q4 16 4 14 Z" fill="none" stroke="#7dd3fc" stroke-width="1.8" stroke-linejoin="round"/>
+        <circle cx="9" cy="9.5" r="1" fill="#7dd3fc"/>
+        <circle cx="12" cy="9.5" r="1" fill="#7dd3fc"/>
+        <circle cx="15" cy="9.5" r="1" fill="#7dd3fc"/>
+      </svg>
+      <div class="hud-value" id="hudGossipValue">0/4</div>
+      <div class="hud-label">Fofocas</div>
+    </div>
+
+    <div class="hud-item" id="hudMult">
+      <svg class="hud-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <text x="12" y="17" text-anchor="middle" font-family="Cinzel" font-size="14" font-weight="900" fill="#ffd700">×</text>
+      </svg>
+      <div class="hud-value" id="hudMultValue">×1</div>
+      <div class="hud-label">Fator</div>
+    </div>
+  </div>
+
+  <div class="stage" id="stage">
+    <div class="grid" id="grid"></div>
+    <!-- personagem é injetado aqui via JS -->
+  </div>
+
+</div>
+
+<!-- ============================================================
+     OVERLAY FINAL
+     ============================================================ -->
+<div class="final-overlay" id="finalOverlay">
+  <div class="final-content">
+    <div class="final-badge" id="finalBadge">DESCOBRIU O SEGREDO</div>
+    <div class="final-secret" id="finalSecret">FOI A CAROL.</div>
+    <div class="final-quote" id="finalQuote">“Eu sabia que aquela chave não era dela…”</div>
+
+    <div class="final-stats">
+      <div class="final-stat">
+        <div class="final-stat-label">Moedas</div>
+        <div class="final-stat-value" id="finalCoins">0</div>
+      </div>
+      <div class="final-stat">
+        <div class="final-stat-label">Pistas</div>
+        <div class="final-stat-value" id="finalClues">0</div>
+      </div>
+      <div class="final-stat">
+        <div class="final-stat-label">Fofocas</div>
+        <div class="final-stat-value" id="finalGossips">0</div>
+      </div>
+      <div class="final-stat">
+        <div class="final-stat-label">Fator</div>
+        <div class="final-stat-value" id="finalFactor">×1</div>
+      </div>
+    </div>
+
+    <div class="final-value" id="finalValue">L$ 0,00</div>
+    <div class="final-mult" id="finalMultLabel">PRÊMIO TOTAL</div>
+
+    <button class="final-btn" id="finalBtn">
+      <i class="fa-solid fa-arrow-right"></i>
+      Voltar ao Jogo
+    </button>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ============================================================
+     CONSTANTES
+     ============================================================ */
+  const STORAGE_USERS   = "cassino_users_v1";
+  const STORAGE_SESSION = "cassino_session_v1";
+  const STORAGE_HISTORY = "cassino_history_v1";
+
+  const GAME_PAGE = "laistiger.html";
+
+  const COOLDOWN_MS = 24 * 60 * 60 * 1000;
+
+  // Prêmio máximo por bônus (centavos). Evita farm mesmo se cooldown falhar.
+  const MAX_PRIZE_CENTS = 5000;  // L$ 50,00
+
+  const BASE_COIN_CENTS  = 100;  // 1 moeda = L$ 1,00
+  const BASE_CLUE_CENTS  = 50;   // 1 pista = L$ 0,50
+  const BASE_GOSSIP_CENTS = 30;  // 1 fofoca = L$ 0,30
+
+  const TOTAL_CLUES   = 4;
+  const TOTAL_GOSSIPS = 4;
+
+  /* ============================================================
+     CONTEÚDO — fofocas e pistas (decisão A: placeholders)
+     ============================================================ */
+  const GOSSIPS = [
+    { id: "g1", text: "Eu vi a <em>Carol</em> saindo da sala às <em>23h</em>… e ela não estava sozinha." },
+    { id: "g2", text: "Dizem que o <em>bar da esquina</em> fecha mais tarde do que devia. Bem mais tarde." },
+    { id: "g3", text: "A <em>vizinha</em> ouviu passos no corredor. Passos de salto alto." },
+    { id: "g4", text: "Ninguém viu o <em>celular</em> dela depois da meia-noite. Estranho, não?" },
+  ];
+
+  const CLUES = [
+    { id: "c1", text: "Um <em>bilhete</em> amassado: “me encontra às 23h, não conta pra ninguém”." },
+    { id: "c2", text: "Um <em>recibo</em> de bar com data de ontem. Pago com cartão de outra pessoa." },
+    { id: "c3", text: "Uma <em>chave</em> dourada que não abre nenhuma porta da casa." },
+    { id: "c4", text: "Uma <em>foto</em> meio queimada. Dá pra ver um vulto saindo pela janela." },
+  ];
+
+  const SUSPECTS = [
+    { id: "s1", text: "Ele <em>não olha nos olhos</em>. Diz que estava dormindo. Mas o relógio dele atrasou." },
+    { id: "s2", text: "Ela <em>ri</em> quando pergunto da Carol. Ri de um jeito que não é de deboche." },
+  ];
+
+  const SECRETS = [
+    { id: "sec1", name: "FOI A CAROL.", quote: "“A chave era dela. O bilhete era dela. Só o silêncio não era.”" },
+    { id: "sec2", name: "O SEGREDO ERA DELA.", quote: "“Ela não fugiu. Ela estava esperando alguém — e esse alguém era você.”" },
+  ];
+
+  /* ============================================================
+     ROTAS E FATORES
+     ============================================================ */
+  const ROUTE_FACTORS = {
+    beco:       1.5,
+    bar:        1.0,
+    casa:       0.8,
+    seguir:     1.8,
+    voltar:     1.2,
+    confrontar: 2.0,
+  };
+
+  /* ============================================================
+     HELPERS
+     ============================================================ */
+  const $ = (id) => document.getElementById(id);
+
+  function formatCents(cents) {
+    return (cents / 100).toLocaleString("pt-BR", {
+      minimumFractionDigits: 2, maximumFractionDigits: 2,
+    });
+  }
+
+  function dateNow() { return Date.now(); }
+
+  function sleep(ms) {
+    return new Promise(resolve => {
+      let done = false;
+      const finish = () => { if (done) return; done = true; resolve(); };
+      const t = setTimeout(finish, ms);
+      const start = dateNow();
+      const tick = () => {
+        if (done) return;
+        if (dateNow() - start >= ms) { clearTimeout(t); finish(); return; }
+        try { requestAnimationFrame(tick); } catch (e) {}
+      };
+      try { requestAnimationFrame(tick); } catch (e) {}
+    });
+  }
+
+  function getUsers() {
+    try { return JSON.parse(localStorage.getItem(STORAGE_USERS)) || []; }
+    catch (e) { return []; }
+  }
+  function saveUsers(users) {
+    try { localStorage.setItem(STORAGE_USERS, JSON.stringify(users)); } catch (e) {}
+  }
+  function getSession() {
+    try { return localStorage.getItem(STORAGE_SESSION); } catch (e) { return null; }
+  }
+
+  function vibrate(ms = 12) {
+    try {
+      if (typeof navigator === "undefined" || typeof navigator.vibrate !== "function") return;
+      navigator.vibrate(ms);
+    } catch (e) {}
+  }
+
+  let audioCtx = null;
+  function getAudio() {
+    if (!audioCtx) {
+      try {
+        const Ctor = window.AudioContext || window.webkitAudioContext;
+        audioCtx = new Ctor({ latencyHint: "interactive" });
+      } catch (e) { return null; }
+    }
+    if (audioCtx.state === "suspended") audioCtx.resume();
+    return audioCtx;
+  }
+  function playTick() {
+    const ctx = getAudio(); if (!ctx) return;
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.connect(g); g.connect(ctx.destination); o.type = "square";
+    o.frequency.value = 700 + Math.random() * 400;
+    const t = ctx.currentTime;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.03, t + 0.005);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.05);
+    o.start(t); o.stop(t + 0.06);
+  }
+  function playPickup() {
+    const ctx = getAudio(); if (!ctx) return;
+    const notas = [784, 1047];
+    notas.forEach((f, i) => {
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.connect(g); g.connect(ctx.destination); o.type = "triangle";
+      o.frequency.value = f;
+      const t = ctx.currentTime + i * 0.07;
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.1, t + 0.008);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.2);
+      o.start(t); o.stop(t + 0.22);
+    });
+  }
+  function playWin() {
+    const ctx = getAudio(); if (!ctx) return;
+    const notas = [523, 659, 784, 1047, 1319, 1568];
+    notas.forEach((f, i) => {
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.connect(g); g.connect(ctx.destination); o.type = "triangle";
+      o.frequency.value = f;
+      const t = ctx.currentTime + i * 0.1;
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.13, t + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.3);
+      o.start(t); o.stop(t + 0.34);
+    });
+  }
+
+  /* ============================================================
+     SVG FACTORY — personagens e itens
+     ============================================================ */
+  const SVG_ITEMS = {
+    coin: `
+      <svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="cg" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#fff5cc"/>
+            <stop offset="50%" stop-color="#ffd700"/>
+            <stop offset="100%" stop-color="#b8860b"/>
+          </linearGradient>
+        </defs>
+        <circle cx="20" cy="20" r="14" fill="url(#cg)" stroke="#6b4f0a" stroke-width="1.5"/>
+        <circle cx="20" cy="20" r="8" fill="none" stroke="#6b4f0a" stroke-width="1" opacity="0.4"/>
+        <text x="20" y="26" text-anchor="middle" font-family="Cinzel" font-size="14" font-weight="900" fill="#6b4f0a">$</text>
+        <ellipse cx="15" cy="14" rx="3" ry="4" fill="#fff" opacity="0.5"/>
+      </svg>`,
+    gossip: `
+      <svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
+        <path d="M6 8 Q6 5 9 5 L31 5 Q34 5 34 8 L34 22 Q34 25 31 25 L18 25 L12 32 L12 25 L9 25 Q6 25 6 22 Z"
+          fill="#0a1a2a" stroke="#7dd3fc" stroke-width="1.5" stroke-linejoin="round"/>
+        <circle cx="14" cy="15" r="1.5" fill="#7dd3fc"/>
+        <circle cx="20" cy="15" r="1.5" fill="#7dd3fc"/>
+        <circle cx="26" cy="15" r="1.5" fill="#7dd3fc"/>
+      </svg>`,
+    clue: `
+      <svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="17" cy="17" r="10" fill="none" stroke="#d8b4fe" stroke-width="2.5"/>
+        <line x1="24" y1="24" x2="34" y2="34" stroke="#d8b4fe" stroke-width="3" stroke-linecap="round"/>
+        <circle cx="17" cy="17" r="5" fill="none" stroke="#d8b4fe" stroke-width="1" opacity="0.5"/>
+      </svg>`,
+    decision: `
+      <svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
+        <path d="M20 6 L20 18" stroke="#ffd700" stroke-width="3" stroke-linecap="round"/>
+        <path d="M20 18 L10 32" stroke="#ffd700" stroke-width="3" stroke-linecap="round"/>
+        <path d="M20 18 L30 32" stroke="#ffd700" stroke-width="3" stroke-linecap="round"/>
+        <circle cx="20" cy="6" r="3" fill="#ffd700"/>
+        <circle cx="10" cy="32" r="3" fill="#ffd700"/>
+        <circle cx="30" cy="32" r="3" fill="#ffd700"/>
+      </svg>`,
+    suspect: `
+      <svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
+        <ellipse cx="20" cy="34" rx="14" ry="4" fill="#d4261a" opacity="0.2"/>
+        <circle cx="20" cy="15" r="7" fill="#fca5a5" opacity="0.7"/>
+        <path d="M8 34 Q8 22 20 22 Q32 22 32 34 Z" fill="#fca5a5" opacity="0.7"/>
+        <rect x="16" y="12" width="8" height="3" fill="#0a0508"/>
+      </svg>`,
+    secret: `
+      <svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="sg" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#fff5cc"/>
+            <stop offset="50%" stop-color="#ffd700"/>
+            <stop offset="100%" stop-color="#b8860b"/>
+          </linearGradient>
+        </defs>
+        <rect x="11" y="18" width="18" height="14" rx="2" fill="url(#sg)" stroke="#6b4f0a" stroke-width="1.5"/>
+        <path d="M14 18 L14 12 Q14 7 20 7 Q26 7 26 12 L26 18" fill="none" stroke="#b8860b" stroke-width="2.5"/>
+        <circle cx="20" cy="25" r="2.5" fill="#6b4f0a"/>
+      </svg>`,
+    start: `
+      <svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
+        <rect x="10" y="12" width="20" height="24" rx="2" fill="#2a0a12" stroke="#ffd700" stroke-width="1.5"/>
+        <rect x="14" y="16" width="12" height="8" fill="#ffd700" opacity="0.4"/>
+        <circle cx="27" cy="26" r="1.5" fill="#ffd700"/>
+      </svg>`,
+  };
+
+  const CHARACTER_SVG = `
+    <svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="coatG" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#2a0a12"/>
+          <stop offset="100%" stop-color="#14080c"/>
+        </linearGradient>
+        <linearGradient id="hatG" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#ffd700"/>
+          <stop offset="100%" stop-color="#b8860b"/>
+        </linearGradient>
+      </defs>
+      <!-- sombra -->
+      <ellipse cx="22" cy="42" rx="10" ry="1.8" fill="#000" opacity="0.5"/>
+      <!-- pernas -->
+      <rect x="17" y="33" width="3.5" height="7" fill="#1a0a12"/>
+      <rect x="23.5" y="33" width="3.5" height="7" fill="#1a0a12"/>
+      <!-- sobretudo -->
+      <path d="M12 20 Q12 15 22 15 Q32 15 32 20 L32 34 Q32 36 30 36 L14 36 Q12 36 12 34 Z"
+        fill="url(#coatG)" stroke="#ffd700" stroke-width="1" stroke-opacity="0.5"/>
+      <!-- gola -->
+      <path d="M15 20 L22 24 L29 20" fill="none" stroke="#ffd700" stroke-width="1.2" stroke-opacity="0.7"/>
+      <!-- cabeça -->
+      <circle cx="22" cy="12" r="6" fill="#f5e6c8"/>
+      <!-- olhos -->
+      <circle cx="20" cy="12" r="1" fill="#0a0508"/>
+      <circle cx="24" cy="12" r="1" fill="#0a0508"/>
+      <!-- boca -->
+      <path d="M21 15 Q22 15.5 23 15" stroke="#0a0508" stroke-width="0.6" fill="none" stroke-linecap="round"/>
+      <!-- chapéu -->
+      <ellipse cx="22" cy="7" rx="9" ry="2" fill="url(#hatG)" stroke="#6b4f0a" stroke-width="0.8"/>
+      <path d="M15 7 Q15 1 22 1 Q29 1 29 7 Z" fill="url(#hatG)" stroke="#6b4f0a" stroke-width="0.8"/>
+      <!-- lupa na mão -->
+      <circle cx="35" cy="26" r="4" fill="none" stroke="#d8b4fe" stroke-width="1.5"/>
+      <line x1="33" y1="29" x2="30" y2="33" stroke="#d8b4fe" stroke-width="1.5" stroke-linecap="round"/>
+    </svg>`;
+
+  /* ============================================================
+     ESTADO DO JOGO
+     ============================================================ */
+  const state = {
+    userId: null,
+    mode: "resgate",       // ou "evento"
+    betCents: 0,           // aposta base (só no modo evento)
+    coins: 0,
+    clues: 0,
+    gossips: 0,
+    route: [],
+    routeName: "main",
+    step: 0,
+    trail: [],             // caminho percorrido (índices no grid)
+    collected: new Set(),  // ids de células já coletadas
+    finished: false,
+    usedGossips: new Set(),
+    usedClues: new Set(),
+    usedSuspects: new Set(),
+  };
+
+  /* ============================================================
+     DEFINIÇÃO DO TRAJETO — lista de nós
+     ------------------------------------------------------------
+     Cada nó é { type, col, row, payload? }
+     O character se move pela ordem; decisões ramificam.
+     ============================================================ */
+  const TRAIL_MAIN = [
+    { type: "start",    col: 0, row: 6 },
+    { type: "coin",     col: 1, row: 6 },
+    { type: "gossip",   col: 2, row: 6 },
+    { type: "clue",     col: 3, row: 6 },
+    { type: "decision", col: 4, row: 6, payload: {
+      q: "Onde você começa a investigar?",
+      options: [
+        { id: "beco", title: "Beco dos Fundos",  desc: "Ouvi alguém sussurrando lá...",       cta: "INVESTIGAR" },
+        { id: "bar",  title: "Bar da Esquina",   desc: "Tem algo brilhando no chão.",         cta: "IR ATÉ LÁ"  },
+        { id: "casa", title: "Casa da Vizinha",  desc: "Ela parece saber mais do que diz.",    cta: "BATER"      },
+      ]
+    }},
+  ];
+
+  const ROUTE_NODES = {
+    beco: [
+      { type: "clue",    col: 3, row: 5 },
+      { type: "coin",    col: 3, row: 4 },
+      { type: "suspect", col: 3, row: 3 },
+      { type: "coin",    col: 2, row: 2 },
+      { type: "gossip",  col: 1, row: 1 },
+    ],
+    bar: [
+      { type: "coin",    col: 3, row: 5 },
+      { type: "gossip",  col: 3, row: 4 },
+      { type: "clue",    col: 4, row: 3 },
+      { type: "coin",    col: 3, row: 2 },
+      { type: "gossip",  col: 2, row: 1 },
+    ],
+    casa: [
+      { type: "gossip",  col: 3, row: 5 },
+      { type: "clue",    col: 3, row: 4 },
+      { type: "coin",    col: 4, row: 3 },
+      { type: "gossip",  col: 4, row: 2 },
+      { type: "coin",    col: 3, row: 1 },
+    ],
+  };
+
+  const TRAIL_FINAL = [
+    { type: "decision", col: 2, row: 0, payload: {
+      q: "As pistas convergem. O que você faz?",
+      options: [
+        { id: "seguir",     title: "Seguir a pista",       desc: "Há algo mais fundo nessa história.",  cta: "SEGUIR"     },
+        { id: "confrontar", title: "Confrontar o suspeito", desc: "Hora de encarar quem sobrou.",        cta: "ENFRENTAR"  },
+        { id: "voltar",     title: "Voltar ao início",      desc: "Recomeçar pode revelar o que passou.", cta: "VOLTAR"    },
+      ]
+    }},
+  ];
+
+  const END_NODES = {
+    seguir:     [{ type: "secret", col: 1, row: 0 }],
+    confrontar: [{ type: "suspect", col: 3, row: 0 }, { type: "secret", col: 3, row: 0 }],
+    voltar:     [{ type: "coin", col: 2, row: 0 }, { type: "secret", col: 2, row: 0 }],
+  };
+
+  /* ============================================================
+     RENDER DO GRID
+     ============================================================ */
+  function buildGrid() {
+    const grid = $("grid");
+    if (!grid) return;
+
+    grid.innerHTML = "";
+
+    const cols = 5, rows = 7;
+
+    // Cria todas as células (vazias)
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const cell = document.createElement("div");
+        cell.className = "cell empty";
+        cell.dataset.col = String(c);
+        cell.dataset.row = String(r);
+        grid.appendChild(cell);
+      }
+    }
+
+    // Cria o personagem (uma vez)
+    const char = document.createElement("div");
+    char.className = "character";
+    char.id = "character";
+    char.innerHTML = CHARACTER_SVG;
+    grid.appendChild(char);
+  }
+
+  function cellAt(col, row) {
+    const grid = $("grid");
+    if (!grid) return null;
+    return grid.querySelector(`.cell[data-col="${col}"][data-row="${row}"]`);
+  }
+
+  function placeItem(col, row, type) {
+    const cell = cellAt(col, row);
+    if (!cell) return;
+    cell.className = "cell " + type;
+    cell.dataset.type = type;
+    const svg = SVG_ITEMS[type];
+    if (svg) {
+      cell.innerHTML = `<div class="cell-svg">${svg}</div>`;
+    }
+  }
+
+  function moveCharacterTo(col, row) {
+    const char = $("character");
+    if (!char) return;
+    char.classList.add("walking");
+    const cellSize = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--cell")) || 56;
+    const gap = 4;
+    const offsetX = col * (cellSize + gap);
+    const offsetY = row * (cellSize + gap);
+    char.style.transform = `translate(${offsetX}px, ${offsetY}px)`;
+    setTimeout(() => char.classList.remove("walking"), 500);
+  }
+
+  /* ============================================================
+     HUD
+     ============================================================ */
+  function updateHUD() {
+    const coinEl = $("hudCoinValue");
+    if (coinEl) coinEl.textContent = String(state.coins);
+
+    const clueEl = $("hudClueValue");
+    if (clueEl) clueEl.textContent = `${state.clues}/${TOTAL_CLUES}`;
+
+    const gosEl = $("hudGossipValue");
+    if (gosEl) gosEl.textContent = `${state.gossips}/${TOTAL_GOSSIPS}`;
+
+    const multEl = $("hudMultValue");
+    if (multEl) multEl.textContent = "×" + computeCurrentFactor().toFixed(1);
+  }
+
+  function popHUD(id) {
+    const el = $(id);
+    if (!el) return;
+    el.classList.remove("pop");
+    void el.offsetWidth;
+    el.classList.add("pop");
+  }
+
+  /* ============================================================
+     FATOR ATUAL
+     ============================================================ */
+  function computeCurrentFactor() {
+    let routeFactor = 1;
+    if (state.routeName && ROUTE_FACTORS[state.routeName]) {
+      routeFactor = ROUTE_FACTORS[state.routeName];
+    } else if (state.route.length > 0) {
+      routeFactor = Math.max(...state.route.map(r => ROUTE_FACTORS[r] || 1));
+    }
+    return routeFactor;
+  }
+
+  /* ============================================================
+     COLETA
+     ============================================================ */
+  async function collectCoin(col, row) {
+    state.coins++;
+    const cell = cellAt(col, row);
+    if (cell) cell.classList.add("collected");
+    playPickup();
+    vibrate(8);
+    updateHUD();
+    popHUD("hudCoins");
+    await sleep(180);
+  }
+
+  async function collectGossip(col, row) {
+    if (state.gossips >= TOTAL_GOSSIPS) {
+      // Ainda coleta, mas vira moeda
+      return collectCoin(col, row);
+    }
+    const pool = GOSSIPS.filter(g => !state.usedGossips.has(g.id));
+    if (pool.length === 0) return collectCoin(col, row);
+    const pick = pool[Math.floor(Math.random() * pool.length)];
+    state.usedGossips.add(pick.id);
+    state.gossips++;
+
+    const cell = cellAt(col, row);
+    if (cell) cell.classList.add("collected");
+
+    updateHUD();
+    popHUD("hudGossips");
+    vibrate(15);
+
+    await showPrompt("gossip", "Fofoca captada", pick.text);
+  }
+
+  async function collectClue(col, row) {
+    if (state.clues >= TOTAL_CLUES) return collectCoin(col, row);
+    const pool = CLUES.filter(c => !state.usedClues.has(c.id));
+    if (pool.length === 0) return collectCoin(col, row);
+    const pick = pool[Math.floor(Math.random() * pool.length)];
+    state.usedClues.add(pick.id);
+    state.clues++;
+
+    const cell = cellAt(col, row);
+    if (cell) cell.classList.add("collected");
+
+    updateHUD();
+    popHUD("hudClues");
+    vibrate(15);
+
+    await showPrompt("clue", "Pista encontrada", pick.text);
+  }
+
+  async function encounterSuspect(col, row) {
+    const pool = SUSPECTS.filter(s => !state.usedSuspects.has(s.id));
+    const pick = pool.length > 0
+      ? pool[Math.floor(Math.random() * pool.length)]
+      : SUSPECTS[0];
+    state.usedSuspects.add(pick.id);
+
+    const cell = cellAt(col, row);
+    if (cell) cell.classList.add("collected");
+
+    vibrate(20);
+    await showPrompt("suspect", "Suspeito avistado", pick.text);
+  }
+
+  /* ============================================================
+     PROMPT (card sobre o grid)
+     ============================================================ */
+  function showPrompt(kind, tag, html) {
+    return new Promise(resolve => {
+      const stage = $("stage");
+      if (!stage) { resolve(); return; }
+
+      const div = document.createElement("div");
+      div.className = "prompt";
+      const tagLabel = kind === "gossip" ? "Fofoca"
+                     : kind === "clue"   ? "Pista"
+                     : kind === "suspect"? "Suspeito"
+                     : "Evento";
+      div.innerHTML = `
+        <div class="prompt-tag ${kind}"><i class="fa-solid fa-circle"></i>${tagLabel}</div>
+        <div class="prompt-text">${html}</div>
+        <button class="prompt-btn">Anotar</button>
+      `;
+      stage.appendChild(div);
+
+      const btn = div.querySelector(".prompt-btn");
+      const close = () => {
+        div.style.opacity = "0";
+        div.style.transform = "translateY(20px)";
+        div.style.transition = "opacity .3s, transform .3s";
+        setTimeout(() => { div.remove(); resolve(); }, 300);
+      };
+      btn.addEventListener("click", close, { once: true });
+    });
+  }
+
+  /* ============================================================
+     DECISÃO
+     ============================================================ */
+  function showDecision(payload) {
+    return new Promise(resolve => {
+      const stage = $("stage");
+      if (!stage) { resolve("bar"); return; }
+
+      const div = document.createElement("div");
+      div.className = "decision";
+
+      let html = `<div class="decision-hint">Escolha um caminho</div>
+                  <div class="decision-q">${payload.q}</div>`;
+
+      payload.options.forEach((opt, i) => {
+        const iconSvg = opt.id === "beco"  ? SVG_ITEMS.clue
+                     : opt.id === "bar"   ? SVG_ITEMS.coin
+                     : opt.id === "casa"  ? SVG_ITEMS.gossip
+                     : opt.id === "seguir"? SVG_ITEMS.clue
+                     : opt.id === "confrontar"? SVG_ITEMS.suspect
+                     : SVG_ITEMS.coin;
+        html += `
+          <button class="decision-opt" data-choice="${opt.id}">
+            <div class="decision-opt-icon">${iconSvg}</div>
+            <div class="decision-opt-text">
+              <div class="decision-opt-title">${opt.title}</div>
+              <div class="decision-opt-desc">${opt.desc}</div>
+              <div class="decision-opt-cta">${opt.cta} →</div>
+            </div>
+          </button>
+        `;
+      });
+
+      div.innerHTML = html;
+      stage.appendChild(div);
+
+      div.querySelectorAll(".decision-opt").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const choice = btn.dataset.choice;
+          div.style.opacity = "0";
+          div.style.transition = "opacity .3s";
+          setTimeout(() => { div.remove(); resolve(choice); }, 280);
+        }, { once: true });
+      });
+    });
+  }
+
+  /* ============================================================
+     EXECUÇÃO DO TRAJETO
+     ============================================================ */
+  async function walkTo(col, row) {
+    moveCharacterTo(col, row);
+    playTick();
+    await sleep(460);
+  }
+
+  async function processNode(node) {
+    await walkTo(node.col, node.row);
+
+    if (node.type === "coin")     { await collectCoin(node.col, node.row); }
+    if (node.type === "gossip")   { await collectGossip(node.col, node.row); }
+    if (node.type === "clue")     { await collectClue(node.col, node.row); }
+    if (node.type === "suspect")  { await encounterSuspect(node.col, node.row); }
+
+    if (node.type === "decision") {
+      const choice = await showDecision(node.payload);
+      state.route.push(choice);
+      // fator: a rota com maior fator define o "routeName" final
+      if (!state.routeName || state.routeName === "main" ||
+          (ROUTE_FACTORS[choice] || 1) > (ROUTE_FACTORS[state.routeName] || 1)) {
+        state.routeName = choice;
+      }
+      updateHUD();
+      return choice;
+    }
+    return null;
+  }
+
+  async function playTrail() {
+    // 1. Trajeto principal
+    let firstChoice = null;
+    for (const node of TRAIL_MAIN) {
+      if (state.finished) return;
+      if (node.type === "decision") {
+        firstChoice = await processNode(node);
+      } else {
+        await processNode(node);
+      }
+    }
+
+    // 2. Rota escolhida
+    if (firstChoice && ROUTE_NODES[firstChoice]) {
+      for (const node of ROUTE_NODES[firstChoice]) {
+        if (state.finished) return;
+        await processNode(node);
+      }
+    }
+
+    // 3. Trajeto final (segunda decisão)
+    let secondChoice = null;
+    for (const node of TRAIL_FINAL) {
+      if (state.finished) return;
+      if (node.type === "decision") {
+        secondChoice = await processNode(node);
+      } else {
+        await processNode(node);
+      }
+    }
+
+    // 4. Nós finais da segunda escolha
+    if (secondChoice && END_NODES[secondChoice]) {
+      for (const node of END_NODES[secondChoice]) {
+        if (state.finished) return;
+        await processNode(node);
+      }
+    }
+
+    // 5. Finaliza
+    await finishInvestigation();
+  }
+
+  /* ============================================================
+     FINAL — cálculo e crédito
+     ============================================================ */
+  function computePrize() {
+    const coinsCents  = state.coins * BASE_COIN_CENTS;
+    const cluesCents  = state.clues * BASE_CLUE_CENTS;
+    const gossipsCents = state.gossips * BASE_GOSSIP_CENTS;
+
+    const subtotal = coinsCents + cluesCents + gossipsCents;
+
+    const routeFactor = computeCurrentFactor();
+    const secretFactor = 5.0;  // por ter chegado ao fim
+
+    let total = Math.floor(subtotal * routeFactor * secretFactor);
+
+    // Aplica a aposta base (modo evento) ou um piso mínimo (modo resgate)
+    if (state.mode === "evento" && state.betCents > 0) {
+      // Em modo evento, o prêmio é escalado pela aposta
+      total = Math.floor(total * Math.max(1, state.betCents / 100));
+    }
+
+    // Teto
+    if (total > MAX_PRIZE_CENTS) total = MAX_PRIZE_CENTS;
+    if (total < 50) total = 50;  // mínimo L$ 0,50
+
+    return {
+      total,
+      breakdown: {
+        coinsCents,
+        cluesCents,
+        gossipsCents,
+        subtotal,
+        routeFactor,
+        secretFactor,
+      },
+    };
+  }
+
+  async function finishInvestigation() {
+    if (state.finished) return;
+    state.finished = true;
+
+    // Sorteia o segredo
+    const secret = SECRETS[Math.floor(Math.random() * SECRETS.length)];
+
+    // Calcula prêmio
+    const prize = computePrize();
+
+    // Credita no usuário
+    creditPrize(prize.total);
+
+    // Grava histórico
+    try {
+      const hist = JSON.parse(localStorage.getItem(STORAGE_HISTORY)) || [];
+      hist.unshift({
+        type: "bonus-investigation",
+        game: "Tigrinho",
+        mode: state.mode,
+        coins: state.coins,
+        clues: state.clues,
+        gossips: state.gossips,
+        route: state.route,
+        win: prize.total,
+        ts: dateNow(),
+      });
+      localStorage.setItem(STORAGE_HISTORY, JSON.stringify(hist.slice(0, 100)));
+    } catch (e) {}
+
+    // Marca cooldown
+    if (state.mode === "resgate") {
+      markClaimed();
+    }
+
+    // Mostra overlay
+    playWin();
+    vibrate([80, 40, 80, 40, 150]);
+    showFinal(secret, prize);
+  }
+
+  function creditPrize(cents) {
+    if (!state.userId || cents <= 0) return;
+    const users = getUsers();
+    const idx = users.findIndex(u => u.id === state.userId);
+    if (idx >= 0) {
+      users[idx].coins = (users[idx].coins || 0) + cents;
+      saveUsers(users);
+    }
+  }
+
+  function markClaimed() {
+    if (!state.userId) return;
+    const users = getUsers();
+    const idx = users.findIndex(u => u.id === state.userId);
+    if (idx >= 0) {
+      users[idx].lastBonusClaim = dateNow();
+      saveUsers(users);
+    }
+  }
+
+  function showFinal(secret, prize) {
+    const overlay = $("finalOverlay");
+    if (!overlay) return;
+
+    const set = (id, val) => { const el = $(id); if (el) el.textContent = val; };
+
+    set("finalSecret", secret.name);
+    set("finalQuote", secret.quote);
+    set("finalCoins", String(state.coins));
+    set("finalClues", `${state.clues}/${TOTAL_CLUES}`);
+    set("finalGossips", `${state.gossips}/${TOTAL_GOSSIPS}`);
+    set("finalFactor", "×" + prize.breakdown.routeFactor.toFixed(1));
+    set("finalValue", "L$ " + formatCents(prize.total));
+    set("finalMultLabel", "FATOR FINAL ×" + (prize.breakdown.routeFactor * prize.breakdown.secretFactor).toFixed(1));
+
+    overlay.removeAttribute("hidden");
+    requestAnimationFrame(() => overlay.classList.add("show"));
+
+    const btn = $("finalBtn");
+    if (btn) {
+      btn.addEventListener("click", () => {
+        try { window.location.replace(GAME_PAGE); }
+        catch (e) { window.location.href = GAME_PAGE; }
+      }, { once: true });
+    }
+  }
+
+  /* ============================================================
+     NAVEGAÇÃO
+     ============================================================ */
+  function goBack() {
+    try { window.location.replace(GAME_PAGE); }
+    catch (e) { window.location.href = GAME_PAGE; }
+  }
+  window.goBack = goBack;
+
+  /* ============================================================
+     BOOT
+     ============================================================ */
+  async function boot() {
+    const splash = $("splash");
+    const wrap = $("wrap");
+    const cooldown = $("cooldownScreen");
+
+    // 1. Lê modo via query
+    let mode = "resgate";
+    let betCents = 0;
+    try {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("mode") === "evento") {
+        mode = "evento";
+        const b = parseInt(params.get("bet") || "0", 10);
+        if (!isNaN(b) && b > 0) betCents = b;
+      }
+    } catch (e) {}
+
+    state.mode = mode;
+    state.betCents = betCents;
+
+    // 2. Valida sessão
+    let user = null;
+    try {
+      const sid = getSession();
+      if (sid) {
+        const users = getUsers();
+        user = users.find(u => u.id === sid) || null;
+      }
+    } catch (e) { user = null; }
+
+    if (!user) {
+      try { localStorage.removeItem(STORAGE_SESSION); } catch (e) {}
+      try { window.location.replace("index.html"); }
+      catch (e) { window.location.href = "index.html"; }
+      return;
+    }
+
+    state.userId = user.id;
+
+    // 3. Cooldown (só no modo resgate)
+    if (mode === "resgate") {
+      const last = typeof user.lastBonusClaim === "number" ? user.lastBonusClaim : 0;
+      const elapsed = dateNow() - last;
+      if (elapsed < COOLDOWN_MS) {
+        const remaining = COOLDOWN_MS - elapsed;
+        const hours = Math.floor(remaining / 3600000);
+        const minutes = Math.floor((remaining % 3600000) / 60000);
+        if (splash) splash.setAttribute("hidden", "");
+        if (cooldown) cooldown.removeAttribute("hidden");
+        const txt = $("cooldownText");
+        if (txt) {
+          txt.textContent = `Você já investigou hoje. Volte em ${hours}h ${minutes}min para uma nova pista.`;
+        }
+        return;
+      }
+    }
+
+    // 4. Setup UI
+    const modeEl = $("modeLabel");
+    if (modeEl) modeEl.textContent = mode === "evento" ? "Evento especial" : "Investigação diária";
+
+    buildGrid();
+    updateHUD();
+
+    if (splash) splash.setAttribute("hidden", "");
+    if (wrap) wrap.removeAttribute("hidden");
+
+    // 5. Posiciona personagem no start (sem animação)
+    const char = $("character");
+    if (char) char.style.transition = "none";
+    moveCharacterTo(0, 6);
+    await sleep(50);
+    if (char) char.style.transition = "";
+
+    // 6. Roda
+    await sleep(400);
+    await playTrail();
+  }
+
+  // Listener de gesto pro áudio
+  const markGesture = () => {
+    getAudio();
+    document.removeEventListener("touchstart", markGesture);
+    document.removeEventListener("click", markGesture);
+  };
+  document.addEventListener("touchstart", markGesture, { once: true, passive: true });
+  document.addEventListener("click", markGesture, { once: true });
+
+  // Voltar
+  const backBtn = $("backBtn");
+  if (backBtn) backBtn.addEventListener("click", goBack);
+
+  // Start
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", boot, { once: true });
+  } else {
+    boot();
+  }
+
+  console.log("%c🔎 regatebonus.html · investigação", "color:#ffd700;font-size:14px;font-weight:900;");
+  console.log("Modo:", "resgate | evento (?mode=evento&bet=N)");
+  console.log("Storage:", STORAGE_USERS, "|", STORAGE_SESSION);
+})();
+</script>
+
+</body>
+</html>
